@@ -31,10 +31,7 @@ const LABEL_MAGIC: u32 = 0x801;
 
 ///return labeled-features with features read from data_dir/data_file_name
 ///and labels read from data_dir/label_file_name
-pub fn read_labeled_data(data_dir: &str,
-			 data_file_name: &str, label_file_name: &str)
-			 -> Vec<LabeledFeatures>
-{
+pub fn read_labeled_data(data_dir: &str, data_file_name: &str, label_file_name: &str) -> Vec<LabeledFeatures> {
     // following line will be replaced during your implementation
     let results = Vec::new();
     results
@@ -43,9 +40,7 @@ pub fn read_labeled_data(data_dir: &str,
 ///Return the index of an image in training_set which is among the k
 ///nearest neighbors of test and has the same label as the most
 ///common label among the k nearest neigbors of test.
-pub fn knn(training_set: &Vec<LabeledFeatures>, test: &Vec<Feature>, k: usize)
-       -> Index
-{
+pub fn knn(training_set: &Vec<LabeledFeatures>, test: &Vec<Feature>, k: usize) -> Index {
     0  //dummy return value
 }
 
