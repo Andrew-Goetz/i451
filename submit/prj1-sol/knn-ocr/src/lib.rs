@@ -32,13 +32,10 @@ const LABEL_MAGIC: u32 = 0x801;
 ///return labeled-features with features read from data_dir/data_file_name
 ///and labels read from data_dir/label_file_name
 
-fn get_magic_number(byte_slice: &[u8]) -> u32 {
-    /*
-    let ret: u32; 
-    for v in byte_slice.iterator() {
-        ret +
-    }
-    */
+fn get_magic_number(byte_vector: &Vec<u8>) -> u32{
+    let ret = u32::from_be_bytes(byte_vector[0..4].try_into().unwrap());
+    println!("{:#?}", &byte_vector[0..4]);
+    ret
 }
 
 pub fn read_labeled_data(data_dir: &str, data_file_name: &str, label_file_name: &str) -> Vec<LabeledFeatures> {
@@ -46,8 +43,11 @@ pub fn read_labeled_data(data_dir: &str, data_file_name: &str, label_file_name: 
     let data_path = format!("{}{}", data_dir, data_file_name);
     let label_path = format!("{}{}", data_dir, label_file_name);
     let data_byte_vector = fs::read(&data_path).expect("Error: invalid data path");
-    let label_byte_vector = fs::read(&data_path).expect("Error: invalid label path");
-    let x: u32 = get_magic_number(&data_byte_vector[0..3]);
+    let label_byte_vector = fs::read(&label_path).expect("Error: invalid label path");
+    let x = get_magic_number(&data_byte_vector);
+    assert_eq!(x, DATA_MAGIC);
+    let y = get_magic_number(&label_byte_vector);
+    assert_eq!(y, LABEL_MAGIC);
     results
 }
 
