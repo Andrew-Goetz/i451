@@ -29,26 +29,54 @@ const DATA_MAGIC: u32 = 0x803;
 ///magic number used at start of MNIST label file
 const LABEL_MAGIC: u32 = 0x801;
 
-///return labeled-features with features read from data_dir/data_file_name
-///and labels read from data_dir/label_file_name
+///rows and columns in image file
+const ROW_COL_COUNT: usize = 28;
 
-fn get_magic_number(byte_vector: &Vec<u8>) -> u32{
-    let ret = u32::from_be_bytes(byte_vector[0..4].try_into().unwrap());
-    println!("{:#?}", &byte_vector[0..4]);
-    ret
+fn get_u32_from_vec(byte_vector: &Vec<u8>, start: usize) -> u32 {
+    u32::from_be_bytes(byte_vector[start..start+4].try_into().unwrap())
 }
 
+///return labeled-features with features read from data_dir/data_file_name
+///and labels read from data_dir/label_file_name
 pub fn read_labeled_data(data_dir: &str, data_file_name: &str, label_file_name: &str) -> Vec<LabeledFeatures> {
-    let results = Vec::new();
     let data_path = format!("{}{}", data_dir, data_file_name);
     let label_path = format!("{}{}", data_dir, label_file_name);
+    //println!("{}\n{}", data_path, label_path);
+
     let data_byte_vector = fs::read(&data_path).expect("Error: invalid data path");
     let label_byte_vector = fs::read(&label_path).expect("Error: invalid label path");
-    let x = get_magic_number(&data_byte_vector);
-    assert_eq!(x, DATA_MAGIC);
-    let y = get_magic_number(&label_byte_vector);
-    assert_eq!(y, LABEL_MAGIC);
+    assert_eq!(get_u32_from_vec(&data_byte_vector, 0), DATA_MAGIC);
+    assert_eq!(get_u32_from_vec(&label_byte_vector, 0), LABEL_MAGIC);
+    
+    let n = get_u32_from_vec(&data_byte_vector, 4) as usize;
+    assert_eq!(get_u32_from_vec(&label_byte_vector, 4) as usize, n);
+
+    let n_rows = get_u32_from_vec(&data_byte_vector, 8) as usize;
+    assert_eq!(ROW_COL_COUNT , n_rows);
+
+    let n_cols = get_u32_from_vec(&data_byte_vector, 12) as usize;
+    assert_eq!(ROW_COL_COUNT, n_cols);
+
+    //println!("n: {}, n_rows: {}, n_cols: {}", n, n_rows, n_cols);
+    let mut results: Vec<LabeledFeatures> = Vec::with_capacity(n);
+    println!("{}", results.len());
+    let mut image_data_start = 16;
+    let label_data_start = 8;
+    let image_size = 784;
+    //println!("{}", (data_byte_vector.len() - 16));
+    //println!("{}", (label_byte_vector.len() - 8));
+    let mut x: LabeledFeatures = LabeledFeatures { features: Vec::with_capacity(image_size), label: 0 };
+    for i in 0..n {
+        x.label = label_byte_vector[i + label_data_start];
+        x.features.extend_from_slice(&data_byte_vector[image_data_start..image_data_start+image_size]);
+        results.push(x);
+        image_data_start += image_size;
+    }
     results
+}
+
+fn cartesian_distance() -> u32 {
+    0
 }
 
 ///Return the index of an image in training_set which is among the k
