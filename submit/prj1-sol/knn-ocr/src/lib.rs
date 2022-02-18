@@ -59,15 +59,14 @@ pub fn read_labeled_data(data_dir: &str, data_file_name: &str, label_file_name: 
 
     //println!("n: {}, n_rows: {}, n_cols: {}", n, n_rows, n_cols);
     let mut results: Vec<LabeledFeatures> = Vec::with_capacity(n);
-    println!("{}", results.len());
     let mut image_data_start = 16;
     let label_data_start = 8;
     let image_size = 784;
-    //println!("{}", (data_byte_vector.len() - 16));
-    //println!("{}", (label_byte_vector.len() - 8));
-    let mut x: LabeledFeatures = LabeledFeatures { features: Vec::with_capacity(image_size), label: 0 };
     for i in 0..n {
-        x.label = label_byte_vector[i + label_data_start];
+        let mut x = LabeledFeatures {
+            features: Vec::with_capacity(image_size),
+            label: label_byte_vector[i + label_data_start]
+        };
         x.features.extend_from_slice(&data_byte_vector[image_data_start..image_data_start+image_size]);
         results.push(x);
         image_data_start += image_size;
@@ -83,5 +82,5 @@ fn cartesian_distance() -> u32 {
 ///nearest neighbors of test and has the same label as the most
 ///common label among the k nearest neigbors of test.
 pub fn knn(training_set: &Vec<LabeledFeatures>, test: &Vec<Feature>, k: usize) -> Index {
-    0  //dummy return value
+    0
 }
