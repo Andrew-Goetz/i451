@@ -80,12 +80,15 @@ struct Distance {
     label: Label
 }
 
-fn cartesian_distance(x1: u32, x2: u32, y1: u32, y2: u32, l: Label) -> Distance {
+fn i32_from_vec_u8(v: &Vec<Feature>) -> i32 {
+    i32::from_be_bytes(v[0..v.len()].try_into().unwrap())
+}
+
+fn cartesian_distance(x1: i32, x2: i32, y1: i32, y2: i32, l: Label) -> Distance {
     Distance {
-        distance: ((x2-x1)*(x2-x1)+(y2-y1)*(y2-y1)),
+        distance: ((x2-x1)*(x2-x1)+(y2-y1)*(y2-y1)) as u32,
         label: l
     }
-
 }
 
 ///Return the index of an image in training_set which is among the k
@@ -93,11 +96,13 @@ fn cartesian_distance(x1: u32, x2: u32, y1: u32, y2: u32, l: Label) -> Distance 
 ///common label among the k nearest neigbors of test.
 pub fn knn(training_set: &Vec<LabeledFeatures>, test: &Vec<Feature>, k: usize) -> Index {
     let mut distances: Vec<Distance> = Vec::with_capacity(training_set.len());
-    for i in 0..training_set.len() {
+
+    //for i in 0..training_set.len() {
         //distances[i].push(cartesian_distance());
-        
-    }
+    //}
+    //let mut label_count: [u8; 10] = [0; 10];
     //for i in 0..k {
+    //  label_count[distances[i].label]++;
     //}
 
     0
