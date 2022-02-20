@@ -4,6 +4,7 @@
 
 
 use std::fs;
+use std::process::exit;
 
 //this may result in non-deterministic behavior
 //use std::collections::HashMap;
@@ -41,7 +42,7 @@ fn get_u32_from_vec(byte_vector: &Vec<u8>, start: usize) -> u32 {
 pub fn read_labeled_data(data_dir: &str, data_file_name: &str, label_file_name: &str) -> Vec<LabeledFeatures> {
     let data_path = format!("{}{}", data_dir, data_file_name);
     let label_path = format!("{}{}", data_dir, label_file_name);
-    println!("{}\n{}", data_path, label_path);
+    //println!("{}\n{}", data_path, label_path);
 
     let data_byte_vector = fs::read(&data_path).expect("Error: invalid data path");
     let label_byte_vector = fs::read(&label_path).expect("Error: invalid label path");
@@ -80,15 +81,20 @@ struct Distance {
     label: Label
 }
 
+/*
 fn i32_from_vec_u8(v: &Vec<Feature>) -> i32 {
     i32::from_be_bytes(v[0..v.len()].try_into().unwrap())
 }
-
 fn cartesian_distance(x1: i32, x2: i32, y1: i32, y2: i32, l: Label) -> Distance {
     Distance {
         distance: ((x2-x1)*(x2-x1)+(y2-y1)*(y2-y1)) as u32,
         label: l
     }
+}
+*/
+
+fn cartesian_distance(test: i32, train: i32) -> u32 {
+    ((test - train)*(test - train)) as u32
 }
 
 ///Return the index of an image in training_set which is among the k
@@ -96,10 +102,29 @@ fn cartesian_distance(x1: i32, x2: i32, y1: i32, y2: i32, l: Label) -> Distance 
 ///common label among the k nearest neigbors of test.
 pub fn knn(training_set: &Vec<LabeledFeatures>, test: &Vec<Feature>, k: usize) -> Index {
     let mut distances: Vec<Distance> = Vec::with_capacity(training_set.len());
-
-    //for i in 0..training_set.len() {
-        //distances[i].push(cartesian_distance());
+    for i in 0..training_set.len() {
+        let mut temp = 0;
+        for j in 0..test.len() {
+            temp += cartesian_distance(test[j] as i32, training_set[i].features[j] as i32);
+        }
+        distances.push(Distance{distance: temp, label: training_set[i].label});
+    }
+    distances.sort_by(|a, b| b.distance.cmp(&a.distance));
+    //for i in 0..distances.len() {
+        //println!("{}", distances[i].distance);
     //}
+
+    /*
+    let mut temp = 0;
+    for i in 0..test.len() {
+        println!("x={}, y={}, val={}", i%28, temp, test[i]);
+        if i % 28 == 0 && i != 0 {
+            temp += 1;
+        }
+    }
+    exit(0);
+    */
+
     //let mut label_count: [u8; 10] = [0; 10];
     //for i in 0..k {
     //  label_count[distances[i].label]++;
