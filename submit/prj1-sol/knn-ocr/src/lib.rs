@@ -41,7 +41,7 @@ fn get_u32_from_vec(byte_vector: &Vec<u8>, start: usize) -> u32 {
 pub fn read_labeled_data(data_dir: &str, data_file_name: &str, label_file_name: &str) -> Vec<LabeledFeatures> {
     let data_path = format!("{}{}", data_dir, data_file_name);
     let label_path = format!("{}{}", data_dir, label_file_name);
-    //println!("{}\n{}", data_path, label_path);
+    println!("{}\n{}", data_path, label_path);
 
     let data_byte_vector = fs::read(&data_path).expect("Error: invalid data path");
     let label_byte_vector = fs::read(&label_path).expect("Error: invalid label path");
@@ -74,7 +74,13 @@ pub fn read_labeled_data(data_dir: &str, data_file_name: &str, label_file_name: 
     results
 }
 
-fn cartesian_distance() -> u32 {
+#[derive(PartialEq, Eq, PartialOrd, Ord)]
+struct Distance { 
+    distance: u32,
+    label: Label
+}
+
+fn cartesian_distance() -> Distance {
     0
 }
 
@@ -82,5 +88,5 @@ fn cartesian_distance() -> u32 {
 ///nearest neighbors of test and has the same label as the most
 ///common label among the k nearest neigbors of test.
 pub fn knn(training_set: &Vec<LabeledFeatures>, test: &Vec<Feature>, k: usize) -> Index {
-    0
+    let mut distances: Vec<Distance> = Vec::with_capacity(training_set.len());
 }
