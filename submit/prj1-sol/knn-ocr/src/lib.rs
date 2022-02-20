@@ -78,20 +78,9 @@ pub fn read_labeled_data(data_dir: &str, data_file_name: &str, label_file_name: 
 #[derive(PartialEq, Eq, PartialOrd, Ord)]
 struct Distance { 
     distance: u32,
-    label: Label
+    label: Label,
+    index: Index
 }
-
-/*
-fn i32_from_vec_u8(v: &Vec<Feature>) -> i32 {
-    i32::from_be_bytes(v[0..v.len()].try_into().unwrap())
-}
-fn cartesian_distance(x1: i32, x2: i32, y1: i32, y2: i32, l: Label) -> Distance {
-    Distance {
-        distance: ((x2-x1)*(x2-x1)+(y2-y1)*(y2-y1)) as u32,
-        label: l
-    }
-}
-*/
 
 fn cartesian_distance(test: i32, train: i32) -> u32 {
     ((test - train)*(test - train)) as u32
@@ -101,34 +90,48 @@ fn cartesian_distance(test: i32, train: i32) -> u32 {
 ///nearest neighbors of test and has the same label as the most
 ///common label among the k nearest neigbors of test.
 pub fn knn(training_set: &Vec<LabeledFeatures>, test: &Vec<Feature>, k: usize) -> Index {
+    //Generate distance vector, sorted by distance
     let mut distances: Vec<Distance> = Vec::with_capacity(training_set.len());
     for i in 0..training_set.len() {
         let mut temp = 0;
         for j in 0..test.len() {
             temp += cartesian_distance(test[j] as i32, training_set[i].features[j] as i32);
         }
-        distances.push(Distance{distance: temp, label: training_set[i].label});
+        distances.push(Distance{distance: temp, label: training_set[i].label, index: i as usize});
     }
-    distances.sort_by(|a, b| b.distance.cmp(&a.distance));
-    //for i in 0..distances.len() {
-        //println!("{}", distances[i].distance);
-    //}
-
+    distances.sort();
     /*
-    let mut temp = 0;
-    for i in 0..test.len() {
-        println!("x={}, y={}, val={}", i%28, temp, test[i]);
-        if i % 28 == 0 && i != 0 {
-            temp += 1;
-        }
+    for i in 0..distances.len() {
+        println!("{}", distances[i].distance);
     }
-    exit(0);
     */
 
-    //let mut label_count: [u8; 10] = [0; 10];
-    //for i in 0..k {
-    //  label_count[distances[i].label]++;
-    //}
+    //Compute label frequency 
+    let mut label_count: [u8; 10] = [0; 10];
+    for i in 0..k {
+        label_count[distances[i].label as usize] += 1;
+    }
 
-    0
+    //Find most frequent label
+    let mut freq: Label = 0;
+    let mut temp = 0;
+    for i in 0..label_count.len() {
+        if label_count[i] > temp {
+            temp = label_count[i];
+            freq = i as Label;
+        }
+    }
+    //println!("Most frequent label: {}", freq);
+//distances.len()-k
+    //Return index of most similar pic that matches most frequent label
+    let mut ret = 0;
+    for i in k..distances.len() {
+        if distances[i].label == freq {
+            ret = distances[i].index;
+            break;
+        }
+    }
+    //assert_eq!(training_set[ret].label, freq);
+    //println!("Label of returned value: {}", training_set[ret].label);
+    ret
 }
