@@ -1,0 +1,10 @@
+[package]
+name = "multiproc-knn-ocr"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+nix = "0.19.1"
+knn_ocr = { path = "../../../../cs551/projects/prj1-sol/knn-ocr/" }
