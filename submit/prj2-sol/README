@@ -1,0 +1,9 @@
+Name:		Andrew Goetz
+B-Number:	B00780086
+Email:		agoetz3@binghamton.edu
+
+Details:
+parent_to_child pipe will have parent process write image data and worker processes read that image data, which they will then process.
+child_to_parent pipe will have worker processes write its result and parent process will read the pipe to recieve the result.
+At end of code, parent will wait() for each individual child process to terminate (we will record child PIDs so we can wait for each child individually).
+If an error is encountered send out a signal (maybe) that will tell child processes to stop.
