@@ -66,13 +66,6 @@ fn main() {
     	Err(err) => usage(&argv[0], &err.to_string()),
     	Ok(a) => args = a,
     };
-    let train_data = read_labeled_data(&args.data_dir, TRAINING_DATA, TRAINING_LABELS);
-    let test_data = read_labeled_data(&args.data_dir, TEST_DATA, TEST_LABELS);
-    let n: usize = if args.n_test <= 0 {
-	    test_data.len()
-    } else {
-	    args.n_test as usize
-    };
 
     // Create pipes before worker processes are created
     let parent_to_child = pipe().unwrap();
@@ -100,6 +93,15 @@ fn main() {
     }
     close(child_read_img).unwrap();
     close(child_write_result).unwrap();
+
+    let train_data = read_labeled_data(&args.data_dir, TRAINING_DATA, TRAINING_LABELS);
+    let test_data = read_labeled_data(&args.data_dir, TEST_DATA, TEST_LABELS);
+    let n: usize = if args.n_test <= 0 {
+	    test_data.len()
+    } else {
+	    args.n_test as usize
+    };
+
 
     let mut ok = 0;
     for i in 0..n {
