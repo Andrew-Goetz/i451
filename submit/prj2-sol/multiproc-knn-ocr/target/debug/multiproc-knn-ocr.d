@@ -1,1 +1,0 @@
-/home/agoetz3/projects/i451/submit/prj2-sol/multiproc-knn-ocr/target/debug/multiproc-knn-ocr: /home/agoetz3/projects/cs551/projects/prj1-sol/knn-ocr/src/lib.rs /home/agoetz3/projects/i451/submit/prj2-sol/multiproc-knn-ocr/src/main.rs
