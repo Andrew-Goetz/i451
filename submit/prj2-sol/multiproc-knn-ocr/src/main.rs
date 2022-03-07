@@ -3,9 +3,9 @@ use std::env;
 use std::error::Error;
 
 use knn_ocr::{read_labeled_data, knn};
-use nix::unistd::{fork, ForkResult, pipe};
-use std::os::unix::io::FromRawFd;
-use std::process::Stdio;
+use nix::unistd::{fork, ForkResult, pipe, close, Pid, read, write};
+use nix::sys::wait::waitpid;
+use std::os::unix::prelude::RawFd;
 
 const TEST_DATA: &str = "t10k-images-idx3-ubyte";
 const TEST_LABELS: &str  = "t10k-labels-idx1-ubyte";
@@ -56,7 +56,7 @@ impl Args {
 }
 
 fn do_child(read_img: RawFd, write_result: RawFd) {
-    0
+    ()
 }
 
 fn main() {
@@ -77,31 +77,29 @@ fn main() {
     // Create pipes before worker processes are created
     let parent_to_child = pipe().unwrap();
     let child_to_parent = pipe().unwrap();
-    let (child_read_img, write_img) = unsafe {
-        (Stdio::from_raw_fd(fd.0), Stdio::from_raw_fd(fd.1))
-    };
-    let (read_result, child_write_result) = unsafe {
-        (Stdio::from_raw_fd(fd.0), Stdio::from_raw_fd(fd.1))
-    };
+    let (child_read_img, write_img) = (parent_to_child.0, parent_to_child.1);
+    let (read_result, child_write_result) = (child_to_parent.0, child_to_parent.1);
 
     // Spawn worker processes, printing out (and recording) PIDs
-    let mut child_pids: [usize; n_proc] = [0; n_proc];
-    for i in 0..args.n_proc {
+    let mut child_pids: Vec<Pid> = Vec::new();
+    for _i in 0..args.n_proc {
         match unsafe{fork()} {
-            Ok(ForkResult::Parent {child}) => {
+            Ok(ForkResult::Parent{child}) => {
                 println!("Process with PID {} created", child);
-                child_pids[i] = child as usize;
+                child_pids.push(child);
             }
             Ok(ForkResult::Child) => {
-                //@TODO Close write_img and read_result
+                close(write_img).unwrap();
+                close(read_result).unwrap();
                 do_child(child_read_img, child_write_result);
             }
-            Err(err) => {
-                panic!("Fork failed", err);
+            Err(_) => {
+                panic!("Fork failed");
             }
         }
     }
-    //@TODO Close child_read_img and child_write_result
+    close(child_read_img).unwrap();
+    close(child_write_result).unwrap();
 
     let mut ok = 0;
     for i in 0..n {
@@ -118,6 +116,10 @@ fn main() {
 		         char::from(digits[expected as usize]), i);
 	    }
     }
-    //@TODO 
+    for i in 0..child_pids.len() {
+        waitpid(child_pids[i], None).expect("waitpid() failed");
+    }
     println!("{}% success", (ok as f64)/(n as f64)*100.0);
+    close(write_img).unwrap();
+    close(read_result).unwrap();
 }
