@@ -3,7 +3,8 @@ B-Number:	B00780086
 Email:		agoetz3@binghamton.edu
 
 Details:
-parent_to_child pipe will have parent process write image data and worker processes read that image data, which they will then process.
-child_to_parent pipe will have worker processes write its result and parent process will read the pipe to recieve the result.
-At end of code, parent will wait() for each individual child process to terminate (we will record child PIDs so we can wait for each child individually).
+The child processes will each have their own copy of the test_data and train_data. The workers will use this data to run the knn function. The workers will then send this data over a pipe in the form of a u8 slice, which contains the nearest_index, predicted label, and expected label. The nearest_index will have to be split up across several u8 slices. When the end of the data alloted to each worker is reached, the workers will terminate.
+
+At end of code, parent will waitpid() for each individual child process to terminate (we will record child PIDs so we can wait for each child individually). The children should stop once there is no more information to read on the pipe.
+
 If an error is encountered send out a signal (maybe) that will tell child processes to stop.

@@ -2,7 +2,7 @@ use std::path::Path;
 use std::env;
 use std::error::Error;
 
-use knn_ocr::{read_labeled_data, knn};
+use knn_ocr::{read_labeled_data, knn, LabeledFeatures};
 use nix::unistd::{fork, ForkResult, pipe, close, Pid, read, write};
 use nix::sys::wait::waitpid;
 use std::os::unix::prelude::RawFd;
@@ -59,8 +59,8 @@ fn if_error(pids: Vec<Pid>) {
 
 }
 
-fn do_child(read_img: RawFd, write_result: RawFd) {
-    ()
+fn do_child(train_data: &Vec<LabeledFeatures>, test_data: &Vec<LabeledFeatures>, fd: RawFd, i: usize, n_proc: usize) {
+
 }
 
 fn main() {
@@ -82,28 +82,22 @@ fn main() {
     
     // Spawn worker processes and their pipes, printing out (and recording) PIDs
     let mut child_pids: Vec<Pid> = Vec::new();
-    let mut p2c_pipes: Vec<(RawFd, RawFd)> = Vec::new();
-    let mut c2p_pipes: Vec<(RawFd, RawFd)> = Vec::new();
+    let mut pipes: Vec<(RawFd, RawFd)> = Vec::new();
     for i in 0..args.n_proc {
-        p2c_pipes.push(pipe().expect("Failed to create pipe"));
-        c2p_pipes.push(pipe().expect("Failed to create pipe"));
+        pipes.push(pipe().expect("Failed to create pipe"));
         match unsafe{fork()} {
             Ok(ForkResult::Parent{child}) => {
                 println!("Process with PID {} created", child);
                 child_pids.push(child);
-                close(p2c_pipes[i].0).expect("Failed to close file descriptor");
-                close(c2p_pipes[i].1).expect("Failed to close file descriptor");
+                close(pipes[i].1).expect("Failed to close file descriptor");
             }
             Ok(ForkResult::Child) => {
-                for j in 0..(i-1) {
-                    close(p2c_pipes[i].0).expect("Failed to close file descriptor");
-                    close(p2c_pipes[i].1).expect("Failed to close file descriptor");
-                    close(c2p_pipes[i].0).expect("Failed to close file descriptor");
-                    close(c2p_pipes[i].1).expect("Failed to close file descriptor");
+                for j in 0..i {
+                    close(pipes[j].0).expect("Failed to close file descriptor");
+                    close(pipes[j].1).expect("Failed to close file descriptor");
                 }
-                close(p2c_pipes[i].1).expect("Failed to close file descriptor");
-                close(c2p_pipes[i].0).expect("Failed to close file descriptor");
-                do_child(p2c_pipes[i].0, c2p_pipes[i].1);
+                close(pipes[i].0).expect("Failed to close file descriptor");
+                do_child(&train_data, &test_data, pipes[i].1, i, args.n_proc);
             }
             Err(_) => {
                 panic!("Fork failed");
@@ -111,7 +105,7 @@ fn main() {
         }
     }
 
-
+    /*
     let mut ok = 0;
     for i in 0..n {
 	    let nearest_index = knn(&train_data, &test_data[i].features, args.k);
@@ -127,12 +121,12 @@ fn main() {
 		         char::from(digits[expected as usize]), i);
 	    }
     }
+    */
 
-    // wait workers, close pipes
+    // reap workers, close open file descriptors
     for i in 0..args.n_proc {
         waitpid(child_pids[i], None).expect("waitpid() failed");
-        close(p2c_pipes[i].1).expect("Failed to close file descriptor");
-        close(c2p_pipes[i].0).expect("Failed to close file descriptor");
+        close(pipes[i].0).expect("Failed to close file descriptor");
     }
     println!("{}% success", (ok as f64)/(n as f64)*100.0);
 }
