@@ -55,6 +55,10 @@ impl Args {
     }
 }
 
+fn if_error(pids: Vec<Pid>) {
+
+}
+
 fn do_child(read_img: RawFd, write_result: RawFd) {
     ()
 }
@@ -67,33 +71,6 @@ fn main() {
     	Ok(a) => args = a,
     };
 
-    // Create pipes before worker processes are created
-    let parent_to_child = pipe().unwrap();
-    let child_to_parent = pipe().unwrap();
-    let (child_read_img, write_img) = (parent_to_child.0, parent_to_child.1);
-    let (read_result, child_write_result) = (child_to_parent.0, child_to_parent.1);
-
-    // Spawn worker processes, printing out (and recording) PIDs
-    let mut child_pids: Vec<Pid> = Vec::new();
-    for _i in 0..args.n_proc {
-        match unsafe{fork()} {
-            Ok(ForkResult::Parent{child}) => {
-                println!("Process with PID {} created", child);
-                child_pids.push(child);
-            }
-            Ok(ForkResult::Child) => {
-                close(write_img).unwrap();
-                close(read_result).unwrap();
-                do_child(child_read_img, child_write_result);
-            }
-            Err(_) => {
-                panic!("Fork failed");
-            }
-        }
-    }
-    close(child_read_img).unwrap();
-    close(child_write_result).unwrap();
-
     let train_data = read_labeled_data(&args.data_dir, TRAINING_DATA, TRAINING_LABELS);
     let test_data = read_labeled_data(&args.data_dir, TEST_DATA, TEST_LABELS);
     let n: usize = if args.n_test <= 0 {
@@ -101,6 +78,38 @@ fn main() {
     } else {
 	    args.n_test as usize
     };
+
+    
+    // Spawn worker processes and their pipes, printing out (and recording) PIDs
+    let mut child_pids: Vec<Pid> = Vec::new();
+    let mut p2c_pipes: Vec<(RawFd, RawFd)> = Vec::new();
+    let mut c2p_pipes: Vec<(RawFd, RawFd)> = Vec::new();
+    for i in 0..args.n_proc {
+        p2c_pipes.push(pipe().expect("Failed to create pipe"));
+        c2p_pipes.push(pipe().expect("Failed to create pipe"));
+        match unsafe{fork()} {
+            Ok(ForkResult::Parent{child}) => {
+                println!("Process with PID {} created", child);
+                child_pids.push(child);
+                close(p2c_pipes[i].0).expect("Failed to close file descriptor");
+                close(c2p_pipes[i].1).expect("Failed to close file descriptor");
+            }
+            Ok(ForkResult::Child) => {
+                for j in 0..(i-1) {
+                    close(p2c_pipes[i].0).expect("Failed to close file descriptor");
+                    close(p2c_pipes[i].1).expect("Failed to close file descriptor");
+                    close(c2p_pipes[i].0).expect("Failed to close file descriptor");
+                    close(c2p_pipes[i].1).expect("Failed to close file descriptor");
+                }
+                close(p2c_pipes[i].1).expect("Failed to close file descriptor");
+                close(c2p_pipes[i].0).expect("Failed to close file descriptor");
+                do_child(p2c_pipes[i].0, c2p_pipes[i].1);
+            }
+            Err(_) => {
+                panic!("Fork failed");
+            }
+        }
+    }
 
 
     let mut ok = 0;
@@ -118,10 +127,12 @@ fn main() {
 		         char::from(digits[expected as usize]), i);
 	    }
     }
-    for i in 0..child_pids.len() {
+
+    // wait workers, close pipes
+    for i in 0..args.n_proc {
         waitpid(child_pids[i], None).expect("waitpid() failed");
+        close(p2c_pipes[i].1).expect("Failed to close file descriptor");
+        close(c2p_pipes[i].0).expect("Failed to close file descriptor");
     }
     println!("{}% success", (ok as f64)/(n as f64)*100.0);
-    close(write_img).unwrap();
-    close(read_result).unwrap();
 }
