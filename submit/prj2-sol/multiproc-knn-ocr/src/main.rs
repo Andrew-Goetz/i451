@@ -6,6 +6,7 @@ use knn_ocr::{read_labeled_data, knn, LabeledFeatures};
 use nix::unistd::{fork, ForkResult, pipe, close, Pid, read, write};
 use nix::sys::wait::waitpid;
 use std::os::unix::prelude::RawFd;
+use std::process::exit;
 
 const TEST_DATA: &str = "t10k-images-idx3-ubyte";
 const TEST_LABELS: &str  = "t10k-labels-idx1-ubyte";
@@ -54,27 +55,30 @@ impl Args {
     	Ok(Args { data_dir, k, n_test, n_proc })
     }
 }
-
+/*
 fn if_error(pids: Vec<Pid>) {
 
 }
-
+*/
 fn do_child(train_data: &Vec<LabeledFeatures>, test_data: &Vec<LabeledFeatures>, fd: RawFd, proc_num: usize, n: usize, args: &Args) {
     let img_num = n / args.n_proc;
     let remainder = n % args.n_proc;
+    let mut send: Vec<u8> = Vec::new();
     for i in 0..img_num {
 	    let nearest_index = knn(&train_data, &test_data[i*args.n_proc].features, args.k);
 	    let predicted = train_data[nearest_index].label;
 	    let expected = test_data[i*args.n_proc].label;
 
-        let mut send: Vec<u8> = Vec::new();
-        let ni_array = nearest_index.to_be_bytes();
+        let ni_array = nearest_index.to_le_bytes();
         for j in 0..ni_array.len() {
             send.push(ni_array[j]);
         }
         send.push(predicted);
         send.push(expected);
+        println!("Before write {}", img_num);
         write(fd, &send).expect("Failed to write to pipe");
+        println!("After write {}", img_num);
+        send.clear();
     }
     // edge case
     if remainder < proc_num {
@@ -82,8 +86,7 @@ fn do_child(train_data: &Vec<LabeledFeatures>, test_data: &Vec<LabeledFeatures>,
 	    let predicted = train_data[nearest_index].label;
 	    let expected = test_data[n-proc_num-1].label;
 
-        let mut send: Vec<u8> = Vec::new();
-        let ni_array = nearest_index.to_be_bytes();
+        let ni_array = nearest_index.to_le_bytes();
         for j in 0..ni_array.len() {
             send.push(ni_array[j]);
         }
@@ -92,6 +95,7 @@ fn do_child(train_data: &Vec<LabeledFeatures>, test_data: &Vec<LabeledFeatures>,
         write(fd, &send).expect("Failed to write to pipe");
     }
     close(fd).expect("Failed to close file descriptor");
+    exit(0);
 }
 
 fn main() {
@@ -135,13 +139,22 @@ fn main() {
             }
         }
     }
-
+    
     let mut ok = 0;
-    /*
-    for i in 0..n {
-	    let nearest_index = knn(&train_data, &test_data[i].features, args.k);
-	    let predicted = train_data[nearest_index].label;
-	    let expected = test_data[i].label;
+    let mut proc_chooser = 0;
+    let mut buf: Vec<u8> = Vec::new();
+    for mut i in 0..n {
+        read(pipes[proc_chooser].0, &mut buf).expect("Failed to read from pipe");
+        if buf.len() == 0 {
+            if i != 0 {
+                i -= 1;
+            }
+            continue;
+        }
+        let nearest_index: usize = usize::from_le_bytes(buf[0..7].try_into().expect("conversion failed"));
+        let predicted = buf[8];
+        let expected = buf[9];
+        println!("ni: {}, p: {}, e: {}", nearest_index, predicted, expected);
 	    if predicted == expected {
 	        ok += 1;
 	    }
@@ -151,8 +164,9 @@ fn main() {
 		         char::from(digits[predicted as usize]), nearest_index,
 		         char::from(digits[expected as usize]), i);
 	    }
+        proc_chooser += 1;
+        proc_chooser %= args.n_proc;
     }
-    */
     println!("{}% success", (ok as f64)/(n as f64)*100.0);
 
     // reap workers, close open file descriptors
