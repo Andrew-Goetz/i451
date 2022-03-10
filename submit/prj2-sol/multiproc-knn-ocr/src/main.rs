@@ -59,8 +59,39 @@ fn if_error(pids: Vec<Pid>) {
 
 }
 
-fn do_child(train_data: &Vec<LabeledFeatures>, test_data: &Vec<LabeledFeatures>, fd: RawFd, i: usize, n_proc: usize) {
+fn do_child(train_data: &Vec<LabeledFeatures>, test_data: &Vec<LabeledFeatures>, fd: RawFd, proc_num: usize, n: usize, args: &Args) {
+    let img_num = n / args.n_proc;
+    let remainder = n % args.n_proc;
+    for i in 0..img_num {
+	    let nearest_index = knn(&train_data, &test_data[i*args.n_proc].features, args.k);
+	    let predicted = train_data[nearest_index].label;
+	    let expected = test_data[i*args.n_proc].label;
 
+        let mut send: Vec<u8> = Vec::new();
+        let ni_array = nearest_index.to_be_bytes();
+        for j in 0..ni_array.len() {
+            send.push(ni_array[j]);
+        }
+        send.push(predicted);
+        send.push(expected);
+        write(fd, &send).expect("Failed to write to pipe");
+    }
+    // edge case
+    if remainder < proc_num {
+	    let nearest_index = knn(&train_data, &test_data[n-proc_num-1].features, args.k);
+	    let predicted = train_data[nearest_index].label;
+	    let expected = test_data[n-proc_num-1].label;
+
+        let mut send: Vec<u8> = Vec::new();
+        let ni_array = nearest_index.to_be_bytes();
+        for j in 0..ni_array.len() {
+            send.push(ni_array[j]);
+        }
+        send.push(predicted);
+        send.push(expected);
+        write(fd, &send).expect("Failed to write to pipe");
+    }
+    close(fd).expect("Failed to close file descriptor");
 }
 
 fn main() {
@@ -97,7 +128,7 @@ fn main() {
                     close(pipes[j].1).expect("Failed to close file descriptor");
                 }
                 close(pipes[i].0).expect("Failed to close file descriptor");
-                do_child(&train_data, &test_data, pipes[i].1, i, args.n_proc);
+                do_child(&train_data, &test_data, pipes[i].1, i, n, &args);
             }
             Err(_) => {
                 panic!("Fork failed");
@@ -105,8 +136,8 @@ fn main() {
         }
     }
 
-    /*
     let mut ok = 0;
+    /*
     for i in 0..n {
 	    let nearest_index = knn(&train_data, &test_data[i].features, args.k);
 	    let predicted = train_data[nearest_index].label;
@@ -122,11 +153,11 @@ fn main() {
 	    }
     }
     */
+    println!("{}% success", (ok as f64)/(n as f64)*100.0);
 
     // reap workers, close open file descriptors
     for i in 0..args.n_proc {
         waitpid(child_pids[i], None).expect("waitpid() failed");
         close(pipes[i].0).expect("Failed to close file descriptor");
     }
-    println!("{}% success", (ok as f64)/(n as f64)*100.0);
 }
