@@ -63,22 +63,20 @@ fn if_error(pids: Vec<Pid>) {
 fn do_child(train_data: &Vec<LabeledFeatures>, test_data: &Vec<LabeledFeatures>, fd: RawFd, proc_num: usize, n: usize, args: &Args) {
     let img_num = n / args.n_proc;
     let remainder = n % args.n_proc;
-    let mut send: Vec<u8> = Vec::new();
+    let mut send: [u8; 10] = [0; 10];
     for i in 0..img_num {
 	    let nearest_index = knn(&train_data, &test_data[i*args.n_proc].features, args.k);
 	    let predicted = train_data[nearest_index].label;
 	    let expected = test_data[i*args.n_proc].label;
-
         let ni_array = nearest_index.to_le_bytes();
         for j in 0..ni_array.len() {
-            send.push(ni_array[j]);
+            send[j] = ni_array[j];
         }
-        send.push(predicted);
-        send.push(expected);
-        println!("Before write {}", img_num);
+        send[8] = predicted;
+        send[9] = expected;
+        //println!("Before write {}", img_num);
         write(fd, &send).expect("Failed to write to pipe");
-        println!("After write {}", img_num);
-        send.clear();
+        //println!("After write {}", img_num);
     }
     // edge case
     if remainder < proc_num {
@@ -88,10 +86,10 @@ fn do_child(train_data: &Vec<LabeledFeatures>, test_data: &Vec<LabeledFeatures>,
 
         let ni_array = nearest_index.to_le_bytes();
         for j in 0..ni_array.len() {
-            send.push(ni_array[j]);
+            send[j] = ni_array[j];
         }
-        send.push(predicted);
-        send.push(expected);
+        send[8] = predicted;
+        send[9] = expected;
         write(fd, &send).expect("Failed to write to pipe");
     }
     close(fd).expect("Failed to close file descriptor");
@@ -142,19 +140,13 @@ fn main() {
     
     let mut ok = 0;
     let mut proc_chooser = 0;
-    let mut buf: Vec<u8> = Vec::new();
+    let mut buf: [u8; 10] = [0; 10];
     for mut i in 0..n {
         read(pipes[proc_chooser].0, &mut buf).expect("Failed to read from pipe");
-        if buf.len() == 0 {
-            if i != 0 {
-                i -= 1;
-            }
-            continue;
-        }
-        let nearest_index: usize = usize::from_le_bytes(buf[0..7].try_into().expect("conversion failed"));
+        let nearest_index = usize::from_le_bytes(buf[0..8].try_into().expect("conversion failed"));
         let predicted = buf[8];
         let expected = buf[9];
-        println!("ni: {}, p: {}, e: {}", nearest_index, predicted, expected);
+        //println!("ni: {}, p: {}, e: {}", nearest_index, predicted, expected);
 	    if predicted == expected {
 	        ok += 1;
 	    }
