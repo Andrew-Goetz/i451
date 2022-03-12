@@ -60,39 +60,32 @@ fn if_error(pids: Vec<Pid>) {
 
 }
 */
-fn do_child(train_data: &Vec<LabeledFeatures>, test_data: &Vec<LabeledFeatures>, fd: RawFd, proc_num: usize, n: usize, args: &Args) {
-    let img_num = n / args.n_proc;
-    let remainder = n % args.n_proc;
+//fn do_child(train_data: &Vec<LabeledFeatures>, test_data: &Vec<LabeledFeatures>, fd: RawFd, proc_id: usize, n: usize, args: &Args) {
+fn do_child(train_data: &Vec<LabeledFeatures>, send_result: RawFd, get_data: RawFd, proc_id: usize, args: &Args) {
+    let mut size: [u8; 8] = [0; 8];
+    read(get_data, &mut size).expect("Failed to read from pipe");
+    let n = usize::from_le_bytes(size[0..8].try_into().expect("Conversion failed in child"));
+    let mut img_num = n / args.n_proc;
+    if n % args.n_proc <= proc_id { 
+        img_num += 1;
+    }
     let mut send: [u8; 10] = [0; 10];
-    for i in 0..img_num {
-	    let nearest_index = knn(&train_data, &test_data[i*args.n_proc].features, args.k);
+    let mut img: [u8; 785] = [0; 785];
+    for _i in 0..img_num {
+        read(get_data, &mut img).expect("Failed to read from pipe");
+	    let nearest_index = knn(&train_data, &img[1..].to_vec(), args.k);
 	    let predicted = train_data[nearest_index].label;
-	    let expected = test_data[i*args.n_proc].label;
+	    let expected = img[0]; // img[0] is the label
         let ni_array = nearest_index.to_le_bytes();
         for j in 0..ni_array.len() {
             send[j] = ni_array[j];
         }
         send[8] = predicted;
         send[9] = expected;
-        //println!("Before write {}", img_num);
-        write(fd, &send).expect("Failed to write to pipe");
-        //println!("After write {}", img_num);
+        write(send_result, &send).expect("Failed to write to pipe");
     }
-    // edge case
-    if remainder < proc_num {
-	    let nearest_index = knn(&train_data, &test_data[n-proc_num-1].features, args.k);
-	    let predicted = train_data[nearest_index].label;
-	    let expected = test_data[n-proc_num-1].label;
-
-        let ni_array = nearest_index.to_le_bytes();
-        for j in 0..ni_array.len() {
-            send[j] = ni_array[j];
-        }
-        send[8] = predicted;
-        send[9] = expected;
-        write(fd, &send).expect("Failed to write to pipe");
-    }
-    close(fd).expect("Failed to close file descriptor");
+    close(send_result).expect("Failed to close file descriptor");
+    close(get_data).expect("Failed to close file descriptor");
     exit(0);
 }
 
@@ -103,34 +96,34 @@ fn main() {
     	Err(err) => usage(&argv[0], &err.to_string()),
     	Ok(a) => args = a,
     };
-
     let train_data = read_labeled_data(&args.data_dir, TRAINING_DATA, TRAINING_LABELS);
-    let test_data = read_labeled_data(&args.data_dir, TEST_DATA, TEST_LABELS);
-    let n: usize = if args.n_test <= 0 {
-	    test_data.len()
-    } else {
-	    args.n_test as usize
-    };
 
-    
     // Spawn worker processes and their pipes, printing out (and recording) PIDs
     let mut child_pids: Vec<Pid> = Vec::new();
-    let mut pipes: Vec<(RawFd, RawFd)> = Vec::new();
+    let mut c2p_pipes = Vec::new();
+    let mut p2c_pipes = Vec::new();
     for i in 0..args.n_proc {
-        pipes.push(pipe().expect("Failed to create pipe"));
+        c2p_pipes.push(pipe().expect("Failed to create pipe"));
+        p2c_pipes.push(pipe().expect("Failed to create pipe"));
         match unsafe{fork()} {
             Ok(ForkResult::Parent{child}) => {
                 println!("Process with PID {} created", child);
                 child_pids.push(child);
-                close(pipes[i].1).expect("Failed to close file descriptor");
+                close(c2p_pipes[i].1).expect("Failed to close file descriptor");
+                close(p2c_pipes[i].0).expect("Failed to close file descriptor");
             }
             Ok(ForkResult::Child) => {
+                /*
                 for j in 0..i {
-                    close(pipes[j].0).expect("Failed to close file descriptor");
-                    close(pipes[j].1).expect("Failed to close file descriptor");
+                    close(c2p_pipes[j].0).expect("Failed to close file descriptor");
+                    close(c2p_pipes[j].1).expect("Failed to close file descriptor");
+                    close(p2c_pipes[j].0).expect("Failed to close file descriptor");
+                    close(p2c_pipes[j].1).expect("Failed to close file descriptor");
                 }
-                close(pipes[i].0).expect("Failed to close file descriptor");
-                do_child(&train_data, &test_data, pipes[i].1, i, n, &args);
+                */
+                close(c2p_pipes[i].0).expect(&format!("failed to close fd for i={}", i));
+                close(p2c_pipes[i].1).expect("Failed to close file descriptor");
+                do_child(&train_data, c2p_pipes[i].1, p2c_pipes[i].0, i, &args);
             }
             Err(_) => {
                 panic!("Fork failed");
@@ -138,12 +131,28 @@ fn main() {
         }
     }
     
+    let test_data = read_labeled_data(&args.data_dir, TEST_DATA, TEST_LABELS);
+    let n: usize = if args.n_test <= 0 {
+	    test_data.len()
+    } else {
+	    args.n_test as usize
+    };
+    
+    // send img to each worker, read result over pipe
     let mut ok = 0;
-    let mut proc_chooser = 0;
     let mut buf: [u8; 10] = [0; 10];
-    for mut i in 0..n {
-        read(pipes[proc_chooser].0, &mut buf).expect("Failed to read from pipe");
-        let nearest_index = usize::from_le_bytes(buf[0..8].try_into().expect("conversion failed"));
+    let mut img: [u8; 785] = [0; 785]; //index 0 = label, indexes 1..784 = image data
+    for i in 0..args.n_proc { // send size to each worker
+        write(p2c_pipes[i].1, &n.to_le_bytes()).expect("Failed to write to pipe");
+    }
+    for i in 0..n {
+        img[0] = test_data[i].label;
+        for j in 1..785 {
+            img[j] = test_data[i].features[j-1];
+        }
+        write(p2c_pipes[i % args.n_proc].1, &img).expect("Failed to write to pipe");
+        read(c2p_pipes[i % args.n_proc].0, &mut buf).expect("Failed to read from pipe");
+        let nearest_index = usize::from_le_bytes(buf[0..8].try_into().expect("Conversion failed in parent"));
         let predicted = buf[8];
         let expected = buf[9];
         //println!("ni: {}, p: {}, e: {}", nearest_index, predicted, expected);
@@ -156,14 +165,13 @@ fn main() {
 		         char::from(digits[predicted as usize]), nearest_index,
 		         char::from(digits[expected as usize]), i);
 	    }
-        proc_chooser += 1;
-        proc_chooser %= args.n_proc;
     }
     println!("{}% success", (ok as f64)/(n as f64)*100.0);
 
     // reap workers, close open file descriptors
     for i in 0..args.n_proc {
+        close(c2p_pipes[i].0).expect("Failed to close file descriptor");
+        close(p2c_pipes[i].1).expect("Failed to close file descriptor");
         waitpid(child_pids[i], None).expect("waitpid() failed");
-        close(pipes[i].0).expect("Failed to close file descriptor");
     }
 }
