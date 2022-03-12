@@ -60,15 +60,15 @@ fn if_error(pids: Vec<Pid>) {
 
 }
 */
-//fn do_child(train_data: &Vec<LabeledFeatures>, test_data: &Vec<LabeledFeatures>, fd: RawFd, proc_id: usize, n: usize, args: &Args) {
 fn do_child(train_data: &Vec<LabeledFeatures>, send_result: RawFd, get_data: RawFd, proc_id: usize, args: &Args) {
     let mut size: [u8; 8] = [0; 8];
     read(get_data, &mut size).expect("Failed to read from pipe");
     let n = usize::from_le_bytes(size[0..8].try_into().expect("Conversion failed in child"));
     let mut img_num = n / args.n_proc;
-    if n % args.n_proc <= proc_id { 
+    if n % args.n_proc > proc_id { 
         img_num += 1;
     }
+    //println!("for proc{}: {}", proc_id, img_num);
     let mut send: [u8; 10] = [0; 10];
     let mut img: [u8; 785] = [0; 785];
     for _i in 0..img_num {
@@ -150,6 +150,7 @@ fn main() {
         for j in 1..785 {
             img[j] = test_data[i].features[j-1];
         }
+        //println!("i%args.n_proc={}",i % args.n_proc);
         write(p2c_pipes[i % args.n_proc].1, &img).expect("Failed to write to pipe");
         read(c2p_pipes[i % args.n_proc].0, &mut buf).expect("Failed to read from pipe");
         let nearest_index = usize::from_le_bytes(buf[0..8].try_into().expect("Conversion failed in parent"));
@@ -173,5 +174,6 @@ fn main() {
         close(c2p_pipes[i].0).expect("Failed to close file descriptor");
         close(p2c_pipes[i].1).expect("Failed to close file descriptor");
         waitpid(child_pids[i], None).expect("waitpid() failed");
+        //println!("Are we hanging here? i = {}", i);
     }
 }
