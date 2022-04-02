@@ -4,4 +4,7 @@ Email:		agoetz3@binghamton.edu
 
 Protocol:
 
+First, known fifo named notify.fifo will be created by knnd, and knnd wait
+reading until a knnc process writes to the known fifo.
+
 
