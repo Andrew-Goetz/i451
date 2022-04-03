@@ -1,3 +1,5 @@
 #!/bin/sh
-make -C knnd
-#make -C knnc
+make -C knnd-src
+mv knnd-src/knnd .
+#make -C knnc-src
+#mv knnc-src/knnc .

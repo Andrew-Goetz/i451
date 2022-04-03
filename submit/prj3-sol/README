@@ -2,24 +2,25 @@ Name:		Andrew Goetz
 B-Number:	B00780086
 Email:		agoetz3@binghamton.edu
 
-Details: First, known fifo named 'notify' will be created by knnd, and knnd
-will wait in a read until a knnc process writes its PID to the known fifo.
-Private FIFOs will be created by the client in the server directory for
-communication between the client and the worker process. The daemon creates the
-worker process, passing it the PID so it can communicate with the client.
+Details: First, known fifo named 'notify' will be created by knnd, and
+knnd will wait in a read until a knnc process writes its PID to the
+known fifo.  Private FIFOs will be created by the client in the server
+directory for communication between the client and the worker process.
+The daemon creates the worker process, passing it the PID so it can
+communicate with the client.
 
-There will be 2 private FIFOs per client and worker process; one is named
-[Client-PID]_in, other is named [Client-PID]_out.
+There will be 2 private FIFOs per client and worker process; one is
+named [Client-PID]_in, other is named [Client-PID]_out.
 
-Using the out FIFO, the client writes an array of 785 bytes to the worker each
-run: index 0 holds the label of test_data[i], and the rest of the array holds
-the features array from test_data[i].
+Using the out FIFO, the client writes an array of 785 bytes to the
+worker each run: index 0-783 holds, the data, and index 784 holds the
+label of that data.
 
-The worker will read this data written to the out FIFO, call the knn function,
-and return a 10 byte array to the client via the in FIFO: index 0-7 holds the
-nearest_index value, index 8 holds the predicted label, and index 9 holds the
-expected label.
+The worker will read this data written to the out FIFO, call the knn
+function, and return an array of 3 unsigned ints to the client via the
+in FIFO: index 0 holds the nearest_index value, index 1 holds the
+predicted label, and index 2 holds the expected label.
 
-The client process will write a NUL character to buf[0], so when the worker
-sees that buf[0] == '\0', worker will terminate, and both client and worker
-will close their fds to the FIFOs.
+The client process will set the label value to 10; this is a unique
+value since labels are only between 0-9. When the worker sees this
+value, it will exit the loop.

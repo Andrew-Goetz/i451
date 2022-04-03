@@ -6,6 +6,8 @@
 #include <sys/types.h>
 #include <unistd.h>
 
+#include <knn_ocr.h>
+
 #define KNOWN_FIFO "notify"
 
 void error_handle(void) {
@@ -18,14 +20,14 @@ void notify_daemon(char *SERVER_DIR, char pid[20]) {
 	int fd = open(fifo, O_RDWR);
 	if(fd == -1)
 		error_handle();
-	if(write(fd, pid, sizeof(pid)) == -1)
+	if(write(fd, pid, 20) == -1)
 		error_handle();
 	//printf("wrote: '%s' to fifo\n", pid);
 	close(fd);
 }
 
 void init_private_fifo(char *out_fifo, int *out, int *in) {
-	char in_fifo[];
+	char in_fifo[30];
 	strncpy(in_fifo, out_fifo, sizeof(out_fifo));
 	strncat(in_fifo, "_in", sizeof("_in"));
 	strncat(out_fifo, "_out", sizeof("_out"));
@@ -44,7 +46,7 @@ void init_private_fifo(char *out_fifo, int *out, int *in) {
 }
 
 int main(int argc, char *argv[]) {
-	if(argc != 3) {
+	if(argc < 3 || argc > 5) {
 		printf("Usage: ./knnc SERVER_DIR DATA_DIR [N_TESTS]\n");
 		exit(EXIT_FAILURE);
 	}
@@ -56,6 +58,40 @@ int main(int argc, char *argv[]) {
 
 	char *part = strncat(argv[1], pid, sizeof(pid));
 	int *out_p; int *in_p;
-	init_private_fifo(part, out, in);
+	init_private_fifo(part, out_p, in_p);
+	int out = *out_p;
+	int in = *in_p;
 	notify_daemon(argv[1], pid);
+
+	const char *data_dir = argv[2];
+	const unsigned n_tests = (argc >= 4) ? atoi(argv[3]) : 0;
+
+	const struct LabeledDataListKnn *test_data = read_labeled_data_knn(data_dir, TEST_DATA, TEST_LABELS);
+
+	const unsigned n_test_data = n_labeled_data_knn(test_data);
+	const unsigned n = (n_tests == 0) ? n_test_data : n_tests;
+
+	unsigned n_ok = 0;
+	unsigned recieve[3];
+	unsigned char send[785];
+
+	for(int i = 0; i < n; i++) {
+		const struct LabeledDataKnn *test = labeled_data_at_index_knn(test_data, i);
+		const struct DataKnn *test_data = labeled_data_data_knn(test);	
+		if(recieve[1] == recieve[2]) {
+			n_ok++;
+		} else {
+			const char *digits = "0123456789";
+			printf("%c[%u] %c[%u]\n", digits[train_label], recieve[0], digits[test_label], i);
+		}
+	}
+	send[784] = 10;
+	if(write(out, send, sizeof(send)) == -1)
+		error_handle();
+	printf("%g%% success\n", n_ok*100.0/n);
+	if(close(in) == -1)
+		error_handle();
+	if(close(out) == -1)
+		error_handle();
+  	free_labeled_data_knn((struct LabeledDataListKnn*)test_data);
 }
