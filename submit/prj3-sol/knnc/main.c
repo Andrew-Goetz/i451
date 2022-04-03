@@ -14,7 +14,7 @@ void error_handle(void) {
 }
 
 void notify_daemon(char *SERVER_DIR, char pid[20]) {
-	char *fifo = strcat(SERVER_DIR, KNOWN_FIFO);
+	char *fifo = strncat(SERVER_DIR, KNOWN_FIFO, sizeof(KNOWN_FIFO));
 	int fd = open(fifo, O_RDWR);
 	if(fd == -1)
 		error_handle();
@@ -24,11 +24,23 @@ void notify_daemon(char *SERVER_DIR, char pid[20]) {
 	close(fd);
 }
 
-int init_private_fifo(char *SERVER_DIR, char pid[20]) {
-	char *fifo = strcat(SERVER_DIR, pid);
-	if(access(fifo, F_OK) && mkfifo(fifo, 0666) == -1)
+void init_private_fifo(char *out_fifo, int *out, int *in) {
+	char in_fifo[];
+	strncpy(in_fifo, out_fifo, sizeof(out_fifo));
+	strncat(in_fifo, "_in", sizeof("_in"));
+	strncat(out_fifo, "_out", sizeof("_out"));
+
+	if(access(in_fifo, F_OK) && mkfifo(in_fifo, 0666) == -1)
 		error_handle();
-	return open(fifo, O_RDWR);
+	*out = open(out_fifo, O_RDWR);
+	if(*out == -1)
+		error_handle();
+
+	if(access(out_fifo, F_OK) && mkfifo(out_fifo, 0666) == -1)
+		error_handle();
+	*in = open(in_fifo, O_RDWR);
+	if(*in == -1)
+		error_handle();
 }
 
 int main(int argc, char *argv[]) {
@@ -39,9 +51,11 @@ int main(int argc, char *argv[]) {
 
 	char pid[20];
 	sprintf(pid, "%ld", (long)getpid());
+	char *server_dir;
+	strncpy(server_dir, argv[1], sizeof(argv[1]));
 
-	int send_images = init_private_fifo(argv[1], pid);
-	if(send_images == -1)
-		error_handle();
+	char *part = strncat(argv[1], pid, sizeof(pid));
+	int *out_p; int *in_p;
+	init_private_fifo(part, out, in);
 	notify_daemon(argv[1], pid);
 }
