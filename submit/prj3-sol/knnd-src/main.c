@@ -31,7 +31,7 @@ void open_worker_fifos(const char pid[20], int *out, int *in) {
 		error_handle();
 }
 
-void do_work(char pid[20], const unsigned k) {
+void do_work(char pid[20], const unsigned k, const char *data_dir) {
 	int *out_p; int *in_p;
 	open_worker_fifos(pid, out_p, in_p);
 	int out = *out_p; 
@@ -47,9 +47,9 @@ void do_work(char pid[20], const unsigned k) {
 		if(from_client[784] == 10) break;
 		/* Process Image */
 		to_client[0] = knn(training_data, temp, k);
-		to_client[1] = 
+		//to_client[1] = 
 		to_client[2] = from_client[784];
-		const struct LabeledDataKnn *training = labeled_data_at_index_knn(training_data, nearest_index);
+		const struct LabeledDataKnn *training = labeled_data_at_index_knn(training_data, to_client[0]);
 
 		if(write(in, to_client, sizeof(to_client)))
 			error_handle();
@@ -63,7 +63,7 @@ void do_work(char pid[20], const unsigned k) {
 	exit(EXIT_SUCCESS);
 }
 
-void setup_worker(char pid[20], const unsigned k) {
+void setup_worker(char pid[20], const unsigned k, const char *data_dir) {
 	long rc = fork();
 	if(rc) {
 		return; /* daemon returns to service() */
@@ -71,7 +71,7 @@ void setup_worker(char pid[20], const unsigned k) {
 		if(rc = fork()) { 
 			exit(EXIT_SUCCESS);
 		} else if(!rc) {
-			do_work(pid, k);
+			do_work(pid, k, data_dir);
 		} else {
 			error_handle();
 		}
@@ -94,7 +94,7 @@ void service(int argc, char *argv[]) {
 		if(read(fd, buf, sizeof(buf)) == -1)
 			error_handle();
 		//printf("buf:%s\n", buf);
-		setup_worker(buf, k);
+		setup_worker(buf, k, argv[2]);
 		memset(buf, 0, sizeof(buf));
 	}
 	exit(EXIT_FAILURE);

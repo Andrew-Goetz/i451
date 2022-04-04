@@ -82,7 +82,7 @@ int main(int argc, char *argv[]) {
 			n_ok++;
 		} else {
 			const char *digits = "0123456789";
-			printf("%c[%u] %c[%u]\n", digits[train_label], recieve[0], digits[test_label], i);
+			printf("%c[%u] %c[%u]\n", digits[recieve[2]], recieve[0], digits[recieve[1]], i);
 		}
 	}
 	send[784] = 10;
