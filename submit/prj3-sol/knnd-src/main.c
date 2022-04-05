@@ -39,21 +39,23 @@ void do_work(char pid[20], const unsigned k, const char *data_dir) {
 
 	const struct LabeledDataListKnn *training_data = read_labeled_data_knn(data_dir, TRAINING_DATA, TRAINING_LABELS);
 
-	unsigned to_client[3];
-	unsigned char from_client[785];
+	unsigned to_client[2];
+	int get_index[1];
 	for(;;) {
-		if(read(out, from_client, sizeof(from_client)) == -1)
+		if(read(out, get_index, sizeof(get_index)) == -1)
 			error_handle();
-		if(from_client[784] == 10) break;
-		/* Process Image */
-		to_client[0] = knn(training_data, temp, k);
-		//to_client[1] = 
-		to_client[2] = from_client[784];
-		const struct LabeledDataKnn *training = labeled_data_at_index_knn(training_data, to_client[0]);
+		if(get_index[1] < 0) break;
+		struct DataBytesKnn recieve;
+		if(read(out, &recieve, sizeof(recieve)) == -1)
+			error_handle();
+
+		struct DataBytesKnn *test = &recieve;
+		to_client[0] = knn_from_data_bytes(training_data, test, k);
+		const struct LabeledDataKnn *train = labeled_data_at_index_knn(training_data, (unsigned)get_index[1]);
+		to_client[1] = labeled_data_label_knn(train);
 
 		if(write(in, to_client, sizeof(to_client)))
 			error_handle();
-		memset(from_client, 0, sizeof(from_client));
 	} 
 	free_labeled_data_knn((struct LabeledDataListKnn*)training_data);
 	if(close(in) == -1)

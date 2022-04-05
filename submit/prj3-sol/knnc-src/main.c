@@ -72,26 +72,51 @@ int main(int argc, char *argv[]) {
 	const unsigned n = (n_tests == 0) ? n_test_data : n_tests;
 
 	unsigned n_ok = 0;
-	unsigned recieve[3];
-	unsigned char send[785];
+	unsigned recieve[2];
+	int send_index[1];
 
 	for(int i = 0; i < n; i++) {
+		send_index[1] = i;
+		if(write(out, &send_index, sizeof(send_index)) == -1)
+			error_handle();
+
 		const struct LabeledDataKnn *test = labeled_data_at_index_knn(test_data, i);
-		const struct DataKnn *test_data = labeled_data_data_knn(test);	
-		if(recieve[1] == recieve[2]) {
+		const struct DataKnn *test_data = labeled_data_data_knn(test);
+		struct DataBytesKnn send = data_bytes_knn(test_data);
+		if(write(out, &send, sizeof(send)) == -1)
+			error_handle();
+
+		if(read(in, recieve, sizeof(recieve)) == -1)
+			error_handle();
+		
+		unsigned test_label = labeled_data_label_knn(test);
+		if(test_label == recieve[1]) {
 			n_ok++;
 		} else {
 			const char *digits = "0123456789";
-			printf("%c[%u] %c[%u]\n", digits[recieve[2]], recieve[0], digits[recieve[1]], i);
+			printf("%c[%u] %c[%u]\n", digits[recieve[1]], recieve[0], digits[test_label], i);
 		}
 	}
-	send[784] = 10;
-	if(write(out, send, sizeof(send)) == -1)
+	send_index[1] = -1;
+	if(write(out, send_index, sizeof(send_index)) == -1)
 		error_handle();
+
 	printf("%g%% success\n", n_ok*100.0/n);
+
 	if(close(in) == -1)
 		error_handle();
 	if(close(out) == -1)
 		error_handle();
   	free_labeled_data_knn((struct LabeledDataListKnn*)test_data);
+
+	/* Delete FIFOs */
+	char *path_in;
+	char *path_out;
+	sprintf(path_in, "%ld_in", (long)getpid());
+	sprintf(path_out, "%ld_out", (long)getpid());
+	if(remove(path_in) == -1)
+		error_handle();
+	if(remove(path_out) == -1)
+		error_handle();
+	exit(EXIT_SUCCESS);
 }
