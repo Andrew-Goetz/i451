@@ -1,5 +1,4 @@
 #!/bin/sh
-make -C knnd-src
-mv knnd-src/knnd .
-make -C knnc-src
-mv knnc-src/knnc .
+export LD_LIBRARY_PATH=../../../cs551/lib/
+gcc -I ../../../cs551/include/ knnd.c -L ../../../cs551/lib/ -lknn_ocr -o knnd
+gcc -I ../../../cs551/include/ knnc.c -L ../../../cs551/lib/ -lknn_ocr -o knnc
