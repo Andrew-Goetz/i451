@@ -32,14 +32,6 @@ void open_worker_fifos(const char pid[20], int *out, int *in) {
 	*in = open(path_in, O_RDWR);
 	if(*in == -1)
 		panic("Error in function %s on line %d in file %s:", __func__, __LINE__, __FILE__);
-	/*
-	*out = open(pid, O_RDONLY);
-	if(*out == -1)
-		panic("Error in function %s on line %d in file %s:", __func__, __LINE__, __FILE__);
-	access(in_str, F_OK) ? *in = open(pid, O_WRONLY) : panic("Error in function %s on line %d in file %s:", __func__, __LINE__, __FILE__);
-	if(*in == -1)
-		panic("Error in function %s on line %d in file %s:", __func__, __LINE__, __FILE__);
-	*/
 }
 
 void do_work(char pid[20], const unsigned k, const char *data_dir) {
@@ -56,28 +48,31 @@ void do_work(char pid[20], const unsigned k, const char *data_dir) {
 	unsigned to_client[2];
 	int get_index;
 	for(;;) {
-		printf("Before read\n");
-		if(read(out, &get_index, sizeof(get_index)) == -1) {
-			//panic("Error in function %s on line %d in file %s:", __func__, __LINE__, __FILE__);
-			printf("FIFO probably closed, exiting for loop (line %d in %s)\n", __LINE__, __FILE__);
+		if(read(out, &get_index, 8) == -1)
+			panic("Error in function %s on line %d in file %s:", __func__, __LINE__, __FILE__);
+		printf("After read, get_index == %d\n", get_index);
+		if(get_index < 0) {
+			printf("Exiting loop\n");
 			break;
 		}
-		printf("After read, get_index == %d\n", get_index);
-		if(get_index < 0) break;
-		struct DataBytesKnn recieve;
-		if(read(out, &recieve, sizeof(recieve)) == -1)
+		unsigned char recieve[784];
+		if(read(out, recieve, 784) == -1)
 			panic("Error in function %s on line %d in file %s:", __func__, __LINE__, __FILE__);
-
-		printf("Did the second read work?\n");
-
-		struct DataBytesKnn *test = &recieve;
+		printf("Read the recieve array\n");
+		struct DataBytesKnn tmp;
+		tmp.len = 784;
+		for(int j = 0; j < 784; j++) {
+			tmp.bytes[j] = recieve[j];
+		}
+		struct DataBytesKnn *test = &tmp;
+		printf("knn running...\n");
 		to_client[0] = knn_from_data_bytes(training_data, test, k);
+		printf("knn ran!\n");
 		const struct LabeledDataKnn *train = labeled_data_at_index_knn(training_data, (unsigned)get_index);
-		printf("Does knn happen?\n");
 		to_client[1] = labeled_data_label_knn(train);
 		printf("Write result: %u, %u\n", to_client[0], to_client[1]);
 
-		if(write(in, to_client, sizeof(to_client)))
+		if(write(in, to_client, 16) == -1)
 			panic("Error in function %s on line %d in file %s:", __func__, __LINE__, __FILE__);
 	} 
 	free_labeled_data_knn((struct LabeledDataListKnn*)training_data);
@@ -85,6 +80,7 @@ void do_work(char pid[20], const unsigned k, const char *data_dir) {
 		panic("Error in function %s on line %d in file %s:", __func__, __LINE__, __FILE__);
 	if(close(out) == -1)
 		panic("Error in function %s on line %d in file %s:", __func__, __LINE__, __FILE__);
+
 	exit(EXIT_SUCCESS);
 }
 

@@ -1,3 +1,4 @@
+#include <assert.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <stdio.h>
@@ -12,8 +13,8 @@
 
 #define KNOWN_FIFO "notify"
 
-void notify_daemon(char *SERVER_DIR) {
-	char *fifo = strncat(SERVER_DIR, KNOWN_FIFO, sizeof(KNOWN_FIFO));
+void notify_daemon(char *server_dir) {
+	char *fifo = strncat(server_dir, KNOWN_FIFO, sizeof(KNOWN_FIFO));
 	int fd = open(fifo, O_RDWR);
 	if(fd == -1)
 		panic("Error in function %s on line %d in file %s:", __func__, __LINE__, __FILE__);
@@ -38,6 +39,7 @@ void init_private_fifo(char *path_in, char *path_out, int *out, int *in) {
 }
 
 int main(int argc, char *argv[]) {
+	printf("server dir:%s\n", argv[1]);
 	if(argc < 3 || argc > 5) {
 		printf("Usage: ./knnc SERVER_DIR DATA_DIR [N_TESTS]\n");
 		exit(EXIT_FAILURE);
@@ -57,10 +59,10 @@ int main(int argc, char *argv[]) {
 	free(out_p);
 	free(in_p);
 	//printf("%s, %s\n", path_in, path_out);
-	notify_daemon(argv[1]);
+	char *server_dir = argv[1];
+	notify_daemon(server_dir);
 
-	//const char *data_dir = argv[2];
-	const char *data_dir = "../../data";
+	const char *data_dir = argv[2];
 	const unsigned n_tests = (argc >= 4) ? atoi(argv[3]) : 0;
 
 	const struct LabeledDataListKnn *test_data = read_labeled_data_knn(data_dir, TEST_DATA, TEST_LABELS);
@@ -76,19 +78,26 @@ int main(int argc, char *argv[]) {
 		send_index = i;
 		if(write(out, &send_index, sizeof(send_index)) == -1)
 			panic("Error in function %s on line %d in file %s:", __func__, __LINE__, __FILE__);
+		printf("Write1 in knnd succeeded!\n");
 
 		const struct LabeledDataKnn *test = labeled_data_at_index_knn(test_data, i);
-		const struct DataKnn *test_data = labeled_data_data_knn(test);
-		struct DataBytesKnn send = data_bytes_knn(test_data);
-		if(write(out, &send, sizeof(send)) == -1)
+		const struct DataKnn *t = labeled_data_data_knn(test);
+		struct DataBytesKnn tmp = data_bytes_knn(t);
+		unsigned char send[784];
+		for(int j = 0; j < 784; j++) {
+			send[j] = tmp.bytes[j];
+			//printf("%u\n", send[j]);
+		}
+		assert(tmp.len == 784);
+		if(write(out, send, 784) == -1)
 			panic("Error in function %s on line %d in file %s:", __func__, __LINE__, __FILE__);
+		printf("Write2 in knnd succeeded!\n");
 
-
-		if(read(in, recieve, sizeof(recieve)) == -1)
-			panic("Error in function %s on line %d in file %s:", __func__, __LINE__, __FILE__);
-		printf("HELLO FROM KNNC\n");
-		
 		unsigned test_label = labeled_data_label_knn(test);
+		if(read(in, recieve, 16) == -1)
+			panic("Error in function %s on line %d in file %s:", __func__, __LINE__, __FILE__);
+		printf("Read in knnd succeeded! test_label:%u, recieve_label:%u\n", test_label, recieve[1]);
+		
 		if(test_label == recieve[1]) {
 			n_ok++;
 		} else {
@@ -99,6 +108,7 @@ int main(int argc, char *argv[]) {
 	send_index = -1;
 	if(write(out, &send_index, sizeof(send_index)) == -1)
 		panic("Error in function %s on line %d in file %s:", __func__, __LINE__, __FILE__);
+	printf("Sent -1 index to knnd\n");
 
 	printf("%g%% success\n", n_ok*100.0/n);
 
@@ -109,9 +119,9 @@ int main(int argc, char *argv[]) {
   	free_labeled_data_knn((struct LabeledDataListKnn*)test_data);
 
 	/* Delete FIFOs */
-	if(remove(path_in) == -1)
+	if(unlink(path_in) == -1 && errno != ENOENT)
 		panic("Error in function %s on line %d in file %s:", __func__, __LINE__, __FILE__);
-	if(remove(path_out) == -1)
+	if(unlink(path_out) == -1 && errno != ENOENT)
 		panic("Error in function %s on line %d in file %s:", __func__, __LINE__, __FILE__);
 	exit(EXIT_SUCCESS);
 }
