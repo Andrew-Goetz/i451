@@ -13,9 +13,8 @@
 
 #define KNOWN_FIFO "notify"
 
-void notify_daemon(char *server_dir) {
-	char *fifo = strncat(server_dir, KNOWN_FIFO, sizeof(KNOWN_FIFO));
-	int fd = open(fifo, O_RDWR);
+void notify_daemon(void) {
+	int fd = open(KNOWN_FIFO, O_RDWR);
 	if(fd == -1)
 		panic("Error in function %s on line %d in file %s:", __func__, __LINE__, __FILE__);
 	long pid = (long)getpid();
@@ -39,16 +38,22 @@ void init_private_fifo(char *path_in, char *path_out, int *out, int *in) {
 }
 
 int main(int argc, char *argv[]) {
-	printf("server dir:%s\n", argv[1]);
 	if(argc < 3 || argc > 5) {
 		printf("Usage: ./knnc SERVER_DIR DATA_DIR [N_TESTS]\n");
 		exit(EXIT_FAILURE);
 	}
 
+	const char *data_dir = argv[2];
+	/* Read data before chdir */
+	const struct LabeledDataListKnn *test_data = read_labeled_data_knn(data_dir, TEST_DATA, TEST_LABELS);
+
+	if(chdir(argv[1]) == -1)
+		panic("Error in function %s on line %d in file %s:", __func__, __LINE__, __FILE__);
+
 	char path_in[100];
 	char path_out[100];
-	sprintf(path_in, "%s%ld_in", argv[1], (long)getpid());
-	sprintf(path_out, "%s%ld_out", argv[1], (long)getpid());
+	sprintf(path_in, "%ld_in", (long)getpid());
+	sprintf(path_out, "%ld_out", (long)getpid());
 
 	int *out_p = malloc(sizeof(out_p));
 	int *in_p = malloc(sizeof(in_p));
@@ -60,12 +65,10 @@ int main(int argc, char *argv[]) {
 	free(in_p);
 	//printf("%s, %s\n", path_in, path_out);
 	char *server_dir = argv[1];
-	notify_daemon(server_dir);
+	notify_daemon();
 
-	const char *data_dir = argv[2];
+	//printf("data_dir:%s\n", data_dir);
 	const unsigned n_tests = (argc >= 4) ? atoi(argv[3]) : 0;
-
-	const struct LabeledDataListKnn *test_data = read_labeled_data_knn(data_dir, TEST_DATA, TEST_LABELS);
 
 	const unsigned n_test_data = n_labeled_data_knn(test_data);
 	const unsigned n = (n_tests == 0) ? n_test_data : n_tests;
@@ -76,11 +79,12 @@ int main(int argc, char *argv[]) {
 
 	for(int i = 0; i < n; i++) {
 		send_index = i;
-		if(write(out, &send_index, sizeof(send_index)) == -1)
+		if(write(out, &send_index, sizeof(int)) == -1)
 			panic("Error in function %s on line %d in file %s:", __func__, __LINE__, __FILE__);
-		printf("Write1 in knnd succeeded!\n");
+		//printf("Write1 in knnd succeeded!\n");
 
 		const struct LabeledDataKnn *test = labeled_data_at_index_knn(test_data, i);
+
 		const struct DataKnn *t = labeled_data_data_knn(test);
 		struct DataBytesKnn tmp = data_bytes_knn(t);
 		unsigned char send[784];
@@ -88,15 +92,22 @@ int main(int argc, char *argv[]) {
 			send[j] = tmp.bytes[j];
 			//printf("%u\n", send[j]);
 		}
+		/*
+		printf("-----------knnc------------\n");
+		for(int j = 0; j < 784; j++) {
+			printf("%u	", send[j]);
+			if(j % 30 == 0) printf("\n");
+		}
+		*/
 		assert(tmp.len == 784);
 		if(write(out, send, 784) == -1)
 			panic("Error in function %s on line %d in file %s:", __func__, __LINE__, __FILE__);
-		printf("Write2 in knnd succeeded!\n");
+		//printf("Write2 in knnd succeeded!\n");
 
 		unsigned test_label = labeled_data_label_knn(test);
-		if(read(in, recieve, 16) == -1)
+		if(read(in, recieve, sizeof(recieve)) == -1)
 			panic("Error in function %s on line %d in file %s:", __func__, __LINE__, __FILE__);
-		printf("Read in knnd succeeded! test_label:%u, recieve_label:%u\n", test_label, recieve[1]);
+		//printf("Read in knnd succeeded! test_label:%u, recieve_label:%u\n", test_label, recieve[1]);
 		
 		if(test_label == recieve[1]) {
 			n_ok++;
@@ -106,7 +117,7 @@ int main(int argc, char *argv[]) {
 		}
 	}
 	send_index = -1;
-	if(write(out, &send_index, sizeof(send_index)) == -1)
+	if(write(out, &send_index, sizeof(int)) == -1)
 		panic("Error in function %s on line %d in file %s:", __func__, __LINE__, __FILE__);
 	printf("Sent -1 index to knnd\n");
 
