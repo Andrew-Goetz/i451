@@ -83,7 +83,7 @@ fn do_child(train_data: &Vec<LabeledFeatures>, send_result: RawFd, get_data: Raw
     if n % args.n_proc > proc_id { 
         img_num += 1;
     }
-    println!("for proc{}: {}", proc_id, img_num);
+    //println!("for proc{}: {}", proc_id, img_num);
     let mut send: [u8; 10] = [0; 10];
     let mut img: [u8; 785] = [0; 785];
     for _i in 0..img_num {
@@ -196,7 +196,7 @@ fn main() {
         let nearest_index = usize::from_le_bytes(buf[0..8].try_into().expect("Conversion failed in parent"));
         let predicted = buf[8];
         let expected = buf[9];
-        //println!("ni: {}, p: {}, e: {}", nearest_index, predicted, expected);
+        //println!("nearest_index: {}, predicted: {}, expected: {}", nearest_index, predicted, expected);
 	    if predicted == expected {
 	        ok += 1;
 	    }
