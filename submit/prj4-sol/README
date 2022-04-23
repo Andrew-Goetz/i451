@@ -5,9 +5,9 @@ Email:		agoetz3@binghamton.edu
 Details:
 
 The size of the shared memory segment is 784 + sizeof(unsigned)*2 +
-sizeof(int), where 784 = size of a single test image, the first
-unsigned is the result of knn_from_data_bytes, and the second unsigned
-is the label from the training data. This data will be stored as a struct.
+sizeof(int), where 784 = size of a single test image, the first unsigned
+is the nearest_index computed from knn_from_data_bytes, and the second
+unsigned is the training_label. This data will be stored as a struct.
 
 There is a SERVER_SEM semaphore (initialized to 1) that the client will decrement when it wants to use the server, then increment it when it is done with the server.
 

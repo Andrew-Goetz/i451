@@ -77,7 +77,7 @@ int main(int argc, char *argv[]) {
 	for(int i = 0; i < N_SEMS; i++) {
 		const SemOpenArgs *p = &semArgs[i];
 		if((sems[i] = sem_open(p->posixName, p->oflags, p->mode, p->initValue)) == NULL)
-		panic("Error in function %s on line %d in file %s:", __func__, __LINE__, __FILE__);
+			panic("Error in function %s on line %d in file %s:", __func__, __LINE__, __FILE__);
 	}
 
 	/* Setup shared memory */	
@@ -86,22 +86,32 @@ int main(int argc, char *argv[]) {
 		panic("Error in function %s on line %d in file %s:", __func__, __LINE__, __FILE__);
 	if(ftruncate(shmfd, SHM_SIZE) < 0)
 		panic("Error in function %s on line %d in file %s:", __func__, __LINE__, __FILE__);
-	char *buf = NULL;
+	void *buf = NULL;
 	if ((buf = mmap(NULL, SHM_SIZE, PROT_READ|PROT_WRITE, MAP_SHARED, shmfd, 0)) == MAP_FAILED)
 		panic("Error in function %s on line %d in file %s:", __func__, __LINE__, __FILE__);
-	printf("Shared memory attached at %s\n", buf);
+	printf("Shared memory attached at %p\n", buf);
 	
 	/* Read image data */
-	const struct LabeledDataListKnn *training_data = read_labeled_data_knn(argv[2], TRAINING_DATA, TRAINING_LABELS);
+	const struct LabeledDataListKnn *training_data = read_labeled_data_knn(data_dir, TRAINING_DATA, TRAINING_LABELS);
 
 	/* Enter server loop */
 	for(;;) {
 		if(sem_wait(sems[REQUEST_SEM]) < 0)
 			panic("Error in function %s on line %d in file %s:", __func__, __LINE__, __FILE__);
-
-		
-
+		ShmObj *shmdata = (ShmObj*)buf;
+		struct DataBytesKnn *test = malloc(sizeof(DataBytesKnn));
+		test->bytes = shmdata->image;
+		test->len = 784;
+		shmdata->nearest_index = knn_from_data_bytes(training_data, test, k);
+		free(test);
+		const struct LabeledDataKnn *train = labeled_data_at_index_knn(training_data, shmdata->nearest_index);
+		shmdata->train_label = labeled_data_label_knn(train);
 		if(sem_post(sems[RESPONSE_SEM]) < 0)
 			panic("Error in function %s on line %d in file %s:", __func__, __LINE__, __FILE__);
 	} // for(;;)
+
+	DEALLOCATE:
+	free_labeled_data_knn((struct LabeledDataListKnn*)training_data);
+
+	exit(EXIT_SUCCESS);
 }

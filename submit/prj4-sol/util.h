@@ -19,9 +19,8 @@ enum {
 
 typedef struct shmobj {
 	char image[784];
-	unsigned nearest;
-	unsigned predicted;
-	unsigned expected;
+	unsigned nearest_index;
+	unsigned train_label;
 } ShmObj;
 
 #define ALL_RW_PERMS (S_IRUSR|S_IWUSR|S_IRGRP|S_IWGRP|S_IROTH|S_IWGRP)

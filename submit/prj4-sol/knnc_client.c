@@ -9,11 +9,40 @@
 #include <errors.h>
 #include <knn_ocr.h>
 
+typedef struct {
+  const char *posixName;
+  int oflags;
+} SemOpenArgs;
+
+static SemOpenArgs semArgs[] = {
+  { .posixName = SERVER_SEM_NAME,
+    .oflags = O_RDWR,
+  },
+  { .posixName = REQUEST_SEM_NAME,
+    .oflags = O_RDWR,
+  },
+  { .posixName = RESPONSE_SEM_NAME,
+    .oflags = O_RDWR,
+  },
+};
+
 int main(int argc, char *argv[]) {
 	if(argc < 2 || argc > 4) {
 		printf("Usage: ./knnc DATA_DIR [N_TESTS]\n");
 		exit(EXIT_FAILURE);
 	}
+
+	/* Setup semaphores */
+	sem_t *sems[N_SEMS];
+	for (int i = 0; i < N_SEMS; i++) {
+		const SemOpenArgs *p = &semArgs[i];
+		if ((sems[i] = sem_open(p->posixName, p->oflags)) == NULL)
+			panic("Error in function %s on line %d in file %s:", __func__, __LINE__, __FILE__);
+	}
+
+	/* Setup shared memory */
+
+	/* Send image data */
 
 	char data_dir[] = argv[1];
 	const unsigned n_tests = (argc == 3) ? atoi(argv[2]) : 0;
