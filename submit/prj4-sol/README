@@ -2,3 +2,17 @@ Name:		Andrew Goetz
 B-Number:	B00780086
 Email:		agoetz3@binghamton.edu
 
+Details:
+
+The size of the shared memory segment is 784 + sizeof(unsigned)*2 +
+sizeof(int), where 784 = size of a single test image, the first
+unsigned is the result of knn_from_data_bytes, and the second unsigned
+is the label from the training data. This data will be stored as a struct.
+
+There is a SERVER_SEM semaphore (initialized to 1) that the client will decrement when it wants to use the server, then increment it when it is done with the server.
+
+Server waits on the REQUEST semaphore until a client, after getting through SERVER_SEM wait, sends a request and increments REQUEST. Client then waits for response, and server increments RESPONSE semaphore after a response is written to shared memory.
+
+There is a util.h file that has some shared definitions between the two programs (such as names of IPC facilites).
+
+When there's an error, the process will print error message and goto a cleanup segment of the code to deallocate local process resources (mainly file descriptors and semaphores).
