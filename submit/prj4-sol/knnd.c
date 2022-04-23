@@ -1,6 +1,5 @@
 #include <assert.h>
 #include <fcntl.h>
-#include <ndbm.h>
 #include <semaphore.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -15,8 +14,6 @@
 #include <knn_ocr.h>
 
 #include "util.h"
-
-#define DBM_NAME "dbm
 
 typedef struct {
   const char *posixName;
@@ -68,7 +65,7 @@ int main(int argc, char *argv[]) {
 	}
 	assert(sizeof(ShmObj) == SHM_SIZE);
 	/* Setup daemon */
-	char data_dir[] = argv[1];
+	char *data_dir = argv[1];
 	int k = atoi(argv[2]);
 	make_daemon();
 
@@ -99,8 +96,9 @@ int main(int argc, char *argv[]) {
 		if(sem_wait(sems[REQUEST_SEM]) < 0)
 			panic("Error in function %s on line %d in file %s:", __func__, __LINE__, __FILE__);
 		ShmObj *shmdata = (ShmObj*)buf;
-		struct DataBytesKnn *test = malloc(sizeof(DataBytesKnn));
-		test->bytes = shmdata->image;
+		struct DataBytesKnn *test = malloc(sizeof(test));
+		for(int j = 0; j < 784; j++) 
+			test->bytes[j] = shmdata->image[j];
 		test->len = 784;
 		shmdata->nearest_index = knn_from_data_bytes(training_data, test, k);
 		free(test);
