@@ -53,7 +53,8 @@ void do_work(char pid[20], const unsigned k, const struct LabeledDataListKnn *tr
 			printf("Exiting loop\n");
 			break;
 		}
-		unsigned char *recieve = malloc(784);
+		//unsigned char *recieve = malloc(784);
+		unsigned char recieve[784];
 		if(read(out, recieve, 784) == -1)
 			panic("Error in function %s on line %d in file %s:", __func__, __LINE__, __FILE__);
 		/*
@@ -78,7 +79,7 @@ void do_work(char pid[20], const unsigned k, const struct LabeledDataListKnn *tr
 
 		if(write(in, to_client, sizeof(to_client)) == -1)
 			panic("Error in function %s on line %d in file %s:", __func__, __LINE__, __FILE__);
-		free(recieve);
+		//free(recieve);
 	} 
 	free_labeled_data_knn((struct LabeledDataListKnn*)training_data);
 	if(close(in) == -1)
