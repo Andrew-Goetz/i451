@@ -52,8 +52,10 @@ int main(int argc, char *argv[]) {
 	if(shmfd < 0)
 		panic("Error in function %s on line %d in file %s:", __func__, __LINE__, __FILE__);
 	void *buf = NULL;
-	if ((buf = mmap(NULL, SHM_SIZE, PROT_READ|PROT_WRITE, MAP_SHARED, shmfd, 0)) == MAP_FAILED)
-		panic("Error in function %s on line %d in file %s:", __func__, __LINE__, __FILE__);
+	if ((buf = mmap(NULL, SHM_SIZE, PROT_READ|PROT_WRITE, MAP_SHARED, shmfd, 0)) == MAP_FAILED) {
+		error("Error in function %s on line %d in file %s:", __func__, __LINE__, __FILE__);
+		goto DEALLOC;
+	}
 
 	/* Read image data & wait*/
 	const struct LabeledDataListKnn *test_data = read_labeled_data_knn(data_dir, TEST_DATA, TEST_LABELS);
@@ -61,8 +63,14 @@ int main(int argc, char *argv[]) {
 	const unsigned n_test_data = n_labeled_data_knn(test_data);
 	const unsigned n = (n_tests == 0) ? n_test_data : n_tests;
 	unsigned n_ok = 0;
-	if(sem_wait(sems[SERVER_SEM]) < 0)
-		panic("Error in function %s on line %d in file %s:", __func__, __LINE__, __FILE__);
+	int sval;
+	sem_getvalue(sems[SERVER_SEM], &sval);
+	//printf("sem value: %d\n", sval);
+	if(sem_wait(sems[SERVER_SEM]) < 0) {
+		error("Error in function %s on line %d in file %s:", __func__, __LINE__, __FILE__);
+		free_labeled_data_knn((struct LabeledDataListKnn*)test_data);
+		goto DEALLOC;
+	}
 	ShmObj *shmdata = (ShmObj*)buf;
 
 	/* Enter client loop */
@@ -73,10 +81,19 @@ int main(int argc, char *argv[]) {
 		assert(tmp.len == 784);
 		for(int j = 0; j < 784; j++) 
 			shmdata->image[j] = tmp.bytes[j];
-		if(sem_post(sems[REQUEST_SEM]) < 0)
-			panic("Error in function %s on line %d in file %s:", __func__, __LINE__, __FILE__);
-		if(sem_wait(sems[RESPONSE_SEM]) < 0)
-			panic("Error in function %s on line %d in file %s:", __func__, __LINE__, __FILE__);
+		//printf("before request post\n");
+		if(sem_post(sems[REQUEST_SEM]) < 0) {
+			error("Error in function %s on line %d in file %s:", __func__, __LINE__, __FILE__);
+			free_labeled_data_knn((struct LabeledDataListKnn*)test_data);
+			goto DEALLOC;
+		}
+		//printf("after request post\n");
+		if(sem_wait(sems[RESPONSE_SEM]) < 0) {
+			error("Error in function %s on line %d in file %s:", __func__, __LINE__, __FILE__);
+			free_labeled_data_knn((struct LabeledDataListKnn*)test_data);
+			goto DEALLOC;
+		}
+		//printf("after response wait\n");
 		unsigned test_label = labeled_data_label_knn(test);
 		if(test_label == shmdata->train_label) {
 			n_ok++;
@@ -85,13 +102,19 @@ int main(int argc, char *argv[]) {
 			printf("%c[%u] %c[%u]\n", digits[shmdata->train_label], shmdata->nearest_index, digits[test_label], i);
 		}
 	}
+
 	/* sem_post to allow another process access to server */
-	if(sem_post(sems[SERVER_SEM]) < 0)
-		panic("Error in function %s on line %d in file %s:", __func__, __LINE__, __FILE__);
+	if(sem_post(sems[SERVER_SEM]) < 0) {
+		error("Error in function %s on line %d in file %s:", __func__, __LINE__, __FILE__);
+		free_labeled_data_knn((struct LabeledDataListKnn*)test_data);
+		goto DEALLOC;
+	}
 	printf("%g%% success\n", n_ok*100.0/n);
 
-	DEALLOCATE:
 	free_labeled_data_knn((struct LabeledDataListKnn*)test_data);
+	DEALLOC:
+	if(close(shmfd) < 0)
+		error("Error in function %s on line %d in file %s:", __func__, __LINE__, __FILE__);
 
 	exit(EXIT_SUCCESS);
 }

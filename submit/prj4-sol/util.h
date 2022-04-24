@@ -18,7 +18,7 @@ enum {
 };
 
 typedef struct shmobj {
-	char image[784];
+	unsigned char image[784];
 	unsigned nearest_index;
 	unsigned train_label;
 } ShmObj;

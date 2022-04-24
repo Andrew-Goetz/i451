@@ -9,10 +9,31 @@ sizeof(int), where 784 = size of a single test image, the first unsigned
 is the nearest_index computed from knn_from_data_bytes, and the second
 unsigned is the training_label. This data will be stored as a struct.
 
-There is a SERVER_SEM semaphore (initialized to 1) that the client will decrement when it wants to use the server, then increment it when it is done with the server.
+There is a SERVER_SEM semaphore (initialized to 1) that the client will
+decrement when it wants to use the server, then increment it when it is done
+with the server.
 
-Server waits on the REQUEST semaphore until a client, after getting through SERVER_SEM wait, sends a request and increments REQUEST. Client then waits for response, and server increments RESPONSE semaphore after a response is written to shared memory.
+Server waits on the REQUEST semaphore until a client, after getting through
+SERVER_SEM wait, sends a request and increments REQUEST. Client then waits for
+response, and server increments RESPONSE semaphore after a response is written
+to shared memory.
 
-There is a util.h file that has some shared definitions between the two programs (such as names of IPC facilites).
+There is a util.h file that has some shared definitions between the two
+programs (such as names of IPC facilites).
 
-When there's an error, the process will print error message and goto a cleanup segment of the code to deallocate local process resources (mainly file descriptors and semaphores).
+When there's an error, the process will print error message and goto a cleanup
+segment of the code to deallocate local process resources (mainly file
+descriptors and semaphores).
+
+Bugs/Other:
+
+When playing around with valgrind I get 2 reachable warnings from the line
+where the test and train data is read in for both knnd and knnc. I assume this
+is just a problem with valgrind interacting with the Rust function call
+strangely.
+
+Also odd is that when knnd is run with valgrind, knnc will hang when run. I'm
+not sure why this behavior is occurring (semaphores not posting/waiting
+properly when run with valgrind?), but my program seems to work fine normally,
+and valgrind report no other memory leaks than the aforementioned Rust function
+call.
