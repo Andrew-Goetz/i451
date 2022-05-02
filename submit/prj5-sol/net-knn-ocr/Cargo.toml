@@ -1,0 +1,12 @@
+[package]
+name = "net-knn-ocr"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+knn_ocr = { path = "../../../../cs551/projects/prj1-sol/knn-ocr" }
+log = "0.4"
+env_logger = "0.9"
+httparse = "1.7.1"
