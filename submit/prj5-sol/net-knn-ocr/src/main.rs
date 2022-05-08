@@ -1,5 +1,5 @@
 use std::env;
-use std::io::{self, Write, BufReader};
+use std::io::{self, Read, Write, BufReader};
 use std::error::Error;
 use std::net::{TcpListener, TcpStream};
 use std::path::Path;
@@ -16,18 +16,55 @@ use knn_ocr::{LabeledFeatures, read_labeled_data, knn};
 const TRAINING_DATA: &str  = "train-images-idx3-ubyte";
 const TRAINING_LABELS: &str  = "train-labels-idx1-ubyte";
 
+fn handle_connection(mut stream: TcpStream) {
+    loop {
+	    let mut buf = [0; 128];
+	    match stream.read(&mut buf) {
+	        Ok(n) => {
+	    	    if n == 0 {
+	    	        //remote client closed connection
+	    	        break;
+	    	    }
+	    	    //write!(&mut stream, "*** {}", str::from_utf8(&buf[0..n]).unwrap()).unwrap();
+	        }
+	        Err(e) => panic!("{}", e),
+	    }
+    }
+}
+
+fn do_server(port: u16, train_data: Vec<LabeledFeatures>) {
+    let addr = format!("127.0.0.1:{}", port);
+    let conn = TcpListener::bind(&addr).unwrap();
+    let conn_clone = conn.try_clone().expect("TcpStream clone failed.");
+    loop {
+	    match conn_clone.accept() {
+	        Ok((client, addr)) => {
+	    	    println!("new connection: {:?}", addr);
+                let buf_read = BufReader::new(client);
+	    	    //handle_connection(client);
+                let request = parse_request(buf_read).unwrap();
+                for val in request.headers.values() {
+                    println!("   {}", val);
+                }
+	        },
+	        Err(e) => eprintln!("connection error: {:?}", e),
+	    }
+    }
+}
 
 fn main() {
     let argv: Vec<String> = env::args().collect();
     let args;
     match Args::new(&argv) {
-	Err(err) => usage(&argv[0], &err.to_string()),
-	Ok(a) => args = Arc::new(a),
+	    Err(err) => usage(&argv[0], &err.to_string()),
+	    Ok(a) => args = Arc::new(a),
     };
-    //TODO: spin up TCP/IP server
+    /* Read in training images */
+    let train_data = read_labeled_data(&args.data_dir, TRAINING_DATA, TRAINING_LABELS);
+    assert!(train_data.len() == 60000);
+    /* Enter server loop */
+    do_server(args.port, train_data);
 }
-
-//TODO: add functions as necessary
 
 /*********************** Command-Line Arguments ************************/
 
