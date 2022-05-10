@@ -30,11 +30,12 @@ fn handle_request(train_data: &Vec<LabeledFeatures>, conn: &mut TcpStream, reque
     if request.method == "GET" && request.path == "/" {
         let contents = fs::read_to_string(&args.index_path).expect("Failed to read file.");
         let message = format!("HTTP/1.0 200 OK\r\nContent-Type: txt/html\r\nContent-Length: {}\r\n\r\n{}", contents.len(), contents);
-        writeln!(conn, "{}", contents).expect("Write failed.");
+        writeln!(conn, "{}", message).expect("Write failed.");
+        //conn.write(message.as_bytes()).expect("Write failed.");
     } else if request.method == "POST" && request.path == "/ocr" {
         unimplemented!();
     } else {
-        write!(conn, "HTTP/1.0 404 NOT FOUND\r\n\r\n").unwrap();
+        write!(conn, "HTTP/1.0 404 NOT FOUND").unwrap();
     }
 }
 
