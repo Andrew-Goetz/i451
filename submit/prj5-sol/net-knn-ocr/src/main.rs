@@ -16,36 +16,41 @@ use knn_ocr::{LabeledFeatures, read_labeled_data, knn};
 const TRAINING_DATA: &str  = "train-images-idx3-ubyte";
 const TRAINING_LABELS: &str  = "train-labels-idx1-ubyte";
 
-fn handle_connection(mut stream: TcpStream) {
-    loop {
-	    let mut buf = [0; 128];
-	    match stream.read(&mut buf) {
-	        Ok(n) => {
-	    	    if n == 0 {
-	    	        //remote client closed connection
-	    	        break;
-	    	    }
-	    	    //write!(&mut stream, "*** {}", str::from_utf8(&buf[0..n]).unwrap()).unwrap();
-	        }
-	        Err(e) => panic!("{}", e),
-	    }
+fn print_request(request: Request) {
+    println!("request.method: {}", request.method);
+    println!("request.path: {}", request.path);
+    println!("*****HEADERS*****");
+    for val in request.headers.values() {
+        println!("   {}", val);
+    }
+    println!("Body size: {}", request.body.len());
+}
+
+fn handle_request(train_data: &Vec<LabeledFeatures>, conn: &mut TcpStream, request: Request, args: &Arc<Args>) {
+    if request.method == "GET" && request.path == "/" {
+        println!("{}", args.index_path);
+        let contents = fs::read_to_string(&args.index_path).expect("Failed to read file.");
+        write!(conn, "{}", contents).expect("Write failed.");
+    } else if request.method == "POST" && request.path == "/ocr" {
+        println!("hi");
+    } else {
+        write!(conn, "404 file not found.").expect("Write failed.");
+        //conn.write(b"404 file not found.");
     }
 }
 
-fn do_server(port: u16, train_data: Vec<LabeledFeatures>) {
-    let addr = format!("127.0.0.1:{}", port);
+fn do_server(train_data: Vec<LabeledFeatures>, args: Arc<Args>) {
+    let addr = format!("127.0.0.1:{}", args.port);
     let conn = TcpListener::bind(&addr).unwrap();
-    let conn_clone = conn.try_clone().expect("TcpStream clone failed.");
     loop {
-	    match conn_clone.accept() {
+	    match conn.accept() {
 	        Ok((client, addr)) => {
 	    	    println!("new connection: {:?}", addr);
+                let mut client_clone = client.try_clone().expect("TcpStream clone failed.");
                 let buf_read = BufReader::new(client);
-	    	    //handle_connection(client);
                 let request = parse_request(buf_read).unwrap();
-                for val in request.headers.values() {
-                    println!("   {}", val);
-                }
+                //print_request(request);
+                handle_request(&train_data, &mut client_clone, request, &args);
 	        },
 	        Err(e) => eprintln!("connection error: {:?}", e),
 	    }
@@ -63,7 +68,7 @@ fn main() {
     let train_data = read_labeled_data(&args.data_dir, TRAINING_DATA, TRAINING_LABELS);
     assert!(train_data.len() == 60000);
     /* Enter server loop */
-    do_server(args.port, train_data);
+    do_server(train_data, args);
 }
 
 /*********************** Command-Line Arguments ************************/
