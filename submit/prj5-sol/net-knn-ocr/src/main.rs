@@ -28,14 +28,13 @@ fn print_request(request: Request) {
 
 fn handle_request(train_data: &Vec<LabeledFeatures>, conn: &mut TcpStream, request: Request, args: &Arc<Args>) {
     if request.method == "GET" && request.path == "/" {
-        println!("{}", args.index_path);
         let contents = fs::read_to_string(&args.index_path).expect("Failed to read file.");
-        write!(conn, "{}", contents).expect("Write failed.");
+        let message = format!("HTTP/1.0 200 OK\r\nContent-Type: txt/html\r\nContent-Length: {}\r\n\r\n{}", contents.len(), contents);
+        writeln!(conn, "{}", contents).expect("Write failed.");
     } else if request.method == "POST" && request.path == "/ocr" {
-        println!("hi");
+        unimplemented!();
     } else {
-        write!(conn, "404 file not found.").expect("Write failed.");
-        //conn.write(b"404 file not found.");
+        write!(conn, "HTTP/1.0 404 NOT FOUND\r\n\r\n").unwrap();
     }
 }
 
