@@ -16,7 +16,7 @@ use knn_ocr::{LabeledFeatures, read_labeled_data, knn};
 const TRAINING_DATA: &str  = "train-images-idx3-ubyte";
 const TRAINING_LABELS: &str  = "train-labels-idx1-ubyte";
 
-fn print_request(request: Request) {
+fn print_request(request: &Request) {
     println!("request.method: {}", request.method);
     println!("request.path: {}", request.path);
     println!("*****HEADERS*****");
@@ -29,13 +29,17 @@ fn print_request(request: Request) {
 fn handle_request(train_data: &Vec<LabeledFeatures>, conn: &mut TcpStream, request: Request, args: &Arc<Args>) {
     if request.method == "GET" && request.path == "/" {
         let contents = fs::read_to_string(&args.index_path).expect("Failed to read file.");
-        let message = format!("HTTP/1.0 200 OK\r\nContent-Type: txt/html\r\nContent-Length: {}\r\n\r\n{}", contents.len(), contents);
+        let message = format!("HTTP/1.0 200 OK\r\nContent-Type: text/html\r\nContent-Length: {}\r\n\r\n{}", contents.len(), contents);
         writeln!(conn, "{}", message).expect("Write failed.");
         //conn.write(message.as_bytes()).expect("Write failed.");
     } else if request.method == "POST" && request.path == "/ocr" {
-        unimplemented!();
+        assert!(request.body.len() == 784);
+        let nearest_index = knn(&train_data, &request.body, args.k);
+        let label = train_data[nearest_index].label;
+        let message = format!("HTTP/1.0 200 OK\r\nContent-Type: text/plain\r\nContent-Length: 3\r\n\r\n{}\r\n", label);
+        writeln!(conn, "{}", message).expect("Write failed.");
     } else {
-        write!(conn, "HTTP/1.0 404 NOT FOUND").unwrap();
+        writeln!(conn, "HTTP/1.0 404 NOT FOUND\r\n").unwrap();
     }
 }
 
