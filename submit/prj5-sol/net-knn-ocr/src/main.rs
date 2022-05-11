@@ -1,5 +1,5 @@
 use std::env;
-use std::io::{self, Read, Write, BufReader};
+use std::io::{Write, BufReader};
 use std::error::Error;
 use std::net::{TcpListener, TcpStream};
 use std::path::Path;
@@ -16,6 +16,7 @@ use knn_ocr::{LabeledFeatures, read_labeled_data, knn};
 const TRAINING_DATA: &str  = "train-images-idx3-ubyte";
 const TRAINING_LABELS: &str  = "train-labels-idx1-ubyte";
 
+/*
 fn print_request(request: &Request) {
     println!("request.method: {}", request.method);
     println!("request.path: {}", request.path);
@@ -25,8 +26,9 @@ fn print_request(request: &Request) {
     }
     println!("Body size: {}", request.body.len());
 }
+*/
 
-fn handle_request(train_data: &Vec<LabeledFeatures>, conn: &mut TcpStream, request: Request, args: &Arc<Args>) {
+fn handle_request(train_data: &Arc<Vec<LabeledFeatures>>, conn: &mut TcpStream, request: &Arc<Request>, args: &Arc<Args>) {
     if request.method == "GET" && request.path == "/" {
         let contents = fs::read_to_string(&args.index_path).expect("Failed to read file.");
         let message = format!("HTTP/1.0 200 OK\r\nContent-Type: text/html\r\nContent-Length: {}\r\n\r\n{}", contents.len(), contents);
@@ -43,18 +45,21 @@ fn handle_request(train_data: &Vec<LabeledFeatures>, conn: &mut TcpStream, reque
     }
 }
 
-fn do_server(train_data: Vec<LabeledFeatures>, args: Arc<Args>) {
+fn do_server(train_data: Arc<Vec<LabeledFeatures>>, args: Arc<Args>) {
     let addr = format!("127.0.0.1:{}", args.port);
     let conn = TcpListener::bind(&addr).unwrap();
     loop {
 	    match conn.accept() {
-	        Ok((client, addr)) => {
-	    	    println!("new connection: {:?}", addr);
+	        Ok((client, _addr)) => {
+	    	    //println!("new connection: {:?}", addr);
                 let mut client_clone = client.try_clone().expect("TcpStream clone failed.");
                 let buf_read = BufReader::new(client);
-                let request = parse_request(buf_read).unwrap();
-                //print_request(request);
-                handle_request(&train_data, &mut client_clone, request, &args);
+                let request = Arc::new(parse_request(buf_read).unwrap());
+                let tr_train_data = Arc::clone(&train_data);
+                let tr_args = Arc::clone(&args);
+                let tr_request = Arc::clone(&request);
+                thread::spawn(move || handle_request(&tr_train_data, &mut client_clone, &tr_request, &tr_args));
+                //handle_request(&train_data, &mut client_clone, request, &args);
 	        },
 	        Err(e) => eprintln!("connection error: {:?}", e),
 	    }
@@ -69,7 +74,7 @@ fn main() {
 	    Ok(a) => args = Arc::new(a),
     };
     /* Read in training images */
-    let train_data = read_labeled_data(&args.data_dir, TRAINING_DATA, TRAINING_LABELS);
+    let train_data = Arc::new(read_labeled_data(&args.data_dir, TRAINING_DATA, TRAINING_LABELS));
     assert!(train_data.len() == 60000);
     /* Enter server loop */
     do_server(train_data, args);
